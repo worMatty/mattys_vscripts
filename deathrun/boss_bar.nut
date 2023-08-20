@@ -27,7 +27,7 @@
 
 // Options
 local auto_color = true; // auto colour the bar green when all blues are in uber condition
-local debug = true; // debug messages
+local debug = false; // debug messages. set this to false for release
 
 // Constants
 team_blue <- Constants.ETFTeam.TF_TEAM_BLUE;
