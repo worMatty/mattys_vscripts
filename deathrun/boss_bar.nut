@@ -1,6 +1,6 @@
 /**
  * Matty's Deathrun Boss Bar
- * Version 0.1
+ * Version 0.2
  *
  * Features:
  * - Supports variable number of blues
@@ -8,27 +8,39 @@
  * - Colours bar green when all blues ubered
  * - Bar disables on round win
  * - Detects outside interference from plugins and disables itself
+ * - Can monitor health of non-player entities added to the array
  *
  * How to use:
- * Add to a logic_script and input CallScriptFunction StartBlueBossBar to start using it.
+ * Add the script to a logic_script entity
+ * If using only with blue players:
+ *      CallScriptFunction StartBlueBossBar
+ * If using with non-player entities:
+ *      RunScriptCode AddEntToBar(arg)
+ *      For arg, supply either an entity targetname (it will pick up all entities named the same)
+ *      or an entity instance (you will know what this is if you are a VScript coder)
+ *      CallScriptFunction StartBossBar
+ * Note that you can add a mixture of players and non-player entities if you wish
  * Call DisableBar to hide it, and EnableBar to show it again.
+ * The bar will disable itself on round win or when there are no valid entities in the array.
+ * You do not need to do anything on round restart because the logic_script is killed and recreated by the game.
  */
 
 // Options
-local auto_color    = true;     // auto colour the bar green when all blues are in uber condition
+local auto_color = true; // auto colour the bar green when all blues are in uber condition
+local debug = true; // debug messages
 
 // Constants
-team_blue           <- Constants.ETFTeam.TF_TEAM_BLUE;
-round_state_win     <- Constants.ERoundState.GR_STATE_TEAM_WIN;
-cond_uber           <- Constants.ETFCond.TF_COND_INVULNERABLE;
+team_blue <- Constants.ETFTeam.TF_TEAM_BLUE;
+round_state_win <- Constants.ERoundState.GR_STATE_TEAM_WIN;
+cond_uber <- Constants.ETFCond.TF_COND_INVULNERABLE;
 
 // Variables
-local enabled       = false;
-local bar_players   = [];
-local peak_health   = 0.0;
-local prev_bar_val  = 0;
-local bar           = Entities.FindByClassname(null, "monster_resource");
-
+local enabled = false;
+local bar_ents = [];
+local peak_health = 0.0;
+local prev_bar_val = 0;
+local bar = Entities.FindByClassname(null, "monster_resource");
+Assert((bar != null && bar.IsValid()), self + " monster_resource not found. Can't use boss bar"); // quit at this point of it doesn't exist
 
 /**
  * Inputtable functions
@@ -36,50 +48,115 @@ local bar           = Entities.FindByClassname(null, "monster_resource");
  */
 
 /**
- * Store all the blue players, display the health bar and monitor health.
- * You only need to call this once.
- * Calling it again will reset it.
+ * Start the boss bar
+ * Fills the entity array with blue players
+ * You only need to call this once. Calling it again will reset the array and peak health figure
  */
-function StartBlueBossBar()
-{
-    if (!IsBarValid())
-    {
-        printl("Unable to start boss bar as the monster_resource is not present! Disabling");
-        DisableBar();
-        return;
-    }
+function StartBlueBossBar() {
+	if (!IsBarValid()) {
+		printl(self + " Unable to start boss bar as the monster_resource is not present! Disabling");
+		DisableBar();
+		return;
+	}
 
-    peak_health = 0.0;
-    bar_players = GetTeamPlayers(team_blue);
+	peak_health = 0.0;
+	bar_ents = GetTeamPlayers(team_blue);
+	EnableBar();
+}
 
-    EnableBar();
+/**
+ * Start the boss bar with the entities in the array
+ * You only need to call this once. Calling it again will reset the array and peak health figure
+ */
+function StartBossBar() {
+	if (!IsBarValid()) {
+		printl(self + " Unable to start boss bar as the monster_resource is not present! Disabling");
+		DisableBar();
+		return;
+	}
+
+	if (bar_ents.len() == 0) {
+		printl(self + " Entity array is empty. Add some entities to monitor the health of then try again")
+		return;
+	}
+
+	peak_health = 0.0;
+	EnableBar();
+}
+
+/**
+ * Add an entity to the bar ents array
+ * The single argument accepts either targetname string or entity instance
+ * @param {string} ent Targetname of ent ent(s) to add
+ * @param {instance} ent Entity instance to add
+ */
+function AddEntToBar(ent) {
+	if (typeof ent == "string") {
+		local i = null;
+		while (i = Entities.FindByName(i, ent)) {
+			if (NetProps.HasProp(i, "m_iHealth")) {
+				bar_ents.push(i);
+				if (debug) printl(self + " pushed " + i + " to bar ents array");
+			} else {
+				printl(self + " entity " + i + " doesn't have a health property. Not adding");
+			}
+		}
+	} else if (typeof ent == "instance" && ent.IsValid()) {
+		if (NetProps.HasProp(ent, "m_iHealth")) {
+			bar_ents.push(ent);
+			if (debug) printl(self + " pushed " + ent + " to bar ents array");
+		} else {
+			printl(self + " entity " + ent + " doesn't have a health property. Not adding");
+		}
+	}
+}
+
+/**
+ * Remove an entity from the bar ents array
+ * The single argument accepts either targetname string or entity instance
+ * @param {string} ent Targetname of ent ent(s) to remove
+ * @param {instance} ent Entity instance to remove
+ */
+function RemoveEntFromBar(ent) {
+	if (typeof ent == "string") {
+		for (local i = bar_ents.len() - 1; i >= 0; i--) {
+			if (!bar_ents[i].IsValid() || bar_ents[i].GetName() == ent) {
+				bar_ents.remove(i);
+				if (debug) printl(self + " removed " + i + " from bar ents array");
+			}
+		}
+	} else if (typeof ent == "instance" && ent.IsValid()) {
+		local index = bar_ents.find(ent);
+		if (index != null) {
+			bar_ents.remove(index);
+			if (debug) printl(self + " removed " + ent + " from bar ents array");
+		}
+	}
 }
 
 /**
  * Enable the bar. This is called internally and you do not need to call it
  * unless you hid the bar using DisableBar().
  */
-function EnableBar()
-{
-    if (!enabled)
-    {
-        enabled = true;
-        AddThinkToEnt(self, "Think");   // add the think
-    }
+function EnableBar() {
+	if (!enabled) {
+		enabled = true;
+		AddThinkToEnt(self, "Think"); // add the think
+		if (debug) printl(self + " enabled bar");
+	}
 }
 
 /**
  * Hide the bar.
  * This is called internally when there is a problem or when the round ends.
  */
-function DisableBar()
-{
-    if (enabled)
-    {
-        AddThinkToEnt(self, "");  // remove the think
-        SetBarValue(0);
-        enabled = false;
-    }
+function DisableBar() {
+	if (enabled) {
+		AddThinkToEnt(self, ""); // remove the think
+		SetBarValue(0);
+		enabled = false; // must be done last because SetBarValue checks if the bar is enabled
+		if (debug) printl(self + " disabled bar");
+	}
 }
 
 
@@ -88,46 +165,34 @@ function DisableBar()
  * --------------------------------------------------------------------------------
  */
 
-function Think()
-{
-    // Disable on round win or if bar not valid
-    if (GetRoundState() == round_state_win || !IsBarValid())
-    {
-        DisableBar();
-        return;
-    }
+function Think() {
+	local data = GetMembersData(); // table of health, max health and all-ubered bool
 
-    local member_data = GetMembersData();
-    local health = member_data[0];
-    local max_health = member_data[1];
-    local ubered = member_data[2];
+	// Disable on round win, or if bar not valid, or no health data returned due to no valid entities
+	if (GetRoundState() == round_state_win || !IsBarValid() || data == null) {
+		DisableBar();
+		return;
+	}
 
+	// Account for overheal
+	if (data.health > data.max_health) {
+		data.max_health = data.health;
+	}
 
-    // Account for overheal
-    if (health > max_health)
-    {
-        max_health = health;
-    }
+	// Set peak
+	if (data.max_health > peak_health) {
+		peak_health = data.max_health;
+	}
 
-    // Set peak
-    if (max_health > peak_health)
-    {
-        peak_health = max_health;
-    }
+	SetBarValue(data.health, peak_health);
 
-    SetBarValue(health, peak_health);
-
-    if (auto_color)
-    {
-        if (ubered)
-        {
-            SetBarColor(1);
-        }
-        else
-        {
-            SetBarColor(0);
-        }
-    }
+	if (auto_color) {
+		if (data.ubered) {
+			SetBarColor(1);
+		} else {
+			SetBarColor(0);
+		}
+	}
 }
 
 
@@ -136,40 +201,54 @@ function Think()
  * --------------------------------------------------------------------------------
  */
 
- /**
-  * Gets health and uber status from array players and returns an array of three values.
-  * [0] = combined health (integer)
-  * [1] = combined max health (integer)
-  * [2] = all ubered (bool)
-  *
-  * @return {array} Array player health and uber status
-  */
-function GetMembersData()
-{
-    local health = 0;
-    local max_health = 0;
-    local ubered = true;
+/**
+ * Get health and max health from entities in the array
+ * @return {table} Table of health (int), max health (int) and all-ubered status (bool). Or null if no changes (no valid ents)
+ */
+function GetMembersData() {
+	local data = {
+		health = 0
+		max_health = 0
+		ubered = true
+	};
 
-    foreach (player in bar_players)
-    {
-        // account for bar members who have since left
-        // account for bar members who have switched team
-        if (!player.IsValid() || player.GetTeam() != team_blue)
-        {
-            //bar_players.remove(player);   // does this skip an index?
-            continue;
-        }
+	// todo: handle removal of invalid entities? or just check isvalid?
+	foreach(ent in bar_ents) {
+		if (!ent.IsValid()) {
+			continue;
+		} else if (ent.IsPlayer()) // handle player
+		{
+			local player = ent;
 
-        health += IsPlayerAlive(player) ? player.GetHealth() : 0;
-        max_health += player.GetMaxHealth();
+			// account for players who have switched team
+			if (player.GetTeam() != team_blue) {
+				continue;
+			}
 
-        if (!player.InCond(cond_uber))
-        {
-            ubered = false;
-        }
-    }
+			data.health += IsPlayerAlive(player) ? player.GetHealth() : 0; // return 0 health if dead
+			data.max_health += player.GetMaxHealth();
 
-    return [health, max_health, ubered];
+			if (!player.InCond(cond_uber)) {
+				data.ubered = false;
+			}
+			// had to disable this because I don't know how to get a math_counter's value in VScript
+			// } else if (ent.GetClassname() == "math_counter") {
+			// data.health += NetProps.GetPropFloat(ent, "m_OutValue").tointeger();
+			// data.max_health += NetProps.GetPropFloat(ent, "m_flMax").tointeger();
+			// data.ubered = false;
+		} else {
+			data.health += ent.GetHealth();
+			data.ubered = false;
+
+			if (NetProps.HasProp(ent, "m_iMaxHealth")) { // todo: does every entity that has m_iHealth also have m_iMaxHealth?
+				data.max_health += ent.GetMaxHealth();
+			} else {
+				data.max_health += ent.Gethealth();
+			}
+		}
+
+		return data; // table will be null if no values were changed
+	}
 }
 
 
@@ -178,9 +257,8 @@ function GetMembersData()
  * --------------------------------------------------------------------------------
  */
 
-function IsBarValid()
-{
-    return (bar != null && bar.IsValid());
+function IsBarValid() {
+	return (bar != null && bar.IsValid());
 }
 
 /**
@@ -189,50 +267,43 @@ function IsBarValid()
  * @param {integer} val Health value
  * @param {integer} max Maximum health value
  */
-function SetBarValue(val, max = 255)
-{
-    if (!IsBarValid())
-    {
-        DisableBar();
-        return;
-    }
+function SetBarValue(val, max = 255) {
+	if (!IsBarValid()) {
+		DisableBar();
+		return;
+	}
 
-    if (enabled && GetBarValue() != prev_bar_val)
-    {
-        printl(self + " Outside interference with monster_resource bar value detected. Disabling");
-        DisableBar();
-        return;
-    }
+	if (enabled && GetBarValue() != prev_bar_val) { // todo: do I need to check if enabled?
+		printl(self + " Outside interference with monster_resource bar value detected. Disabling");
+		DisableBar();
+		return;
+	}
 
-    val = ((val.tofloat() / max) * 255).tointeger();
-    val = Clamp(val, 0, 255);
-    NetProps.SetPropInt(bar, "m_iBossHealthPercentageByte", val);
-    prev_bar_val = val;
+	val = ((val.tofloat() / max) * 255).tointeger();
+	val = Clamp(val, 0, 255);
+	NetProps.SetPropInt(bar, "m_iBossHealthPercentageByte", val);
+	prev_bar_val = val;
+	if (debug) printl(self + " bar value set to " + val);
 }
 
 /**
  * Retrieves the bar value from the monster_resource netprop
- *
  * @return {integer} Bar value from 0-255
  */
-function GetBarValue()
-{
-    return NetProps.GetPropInt(bar, "m_iBossHealthPercentageByte");
+function GetBarValue() {
+	return NetProps.GetPropInt(bar, "m_iBossHealthPercentageByte");
 }
 
 /**
  * Set the bar colour.
  * 0 = default blue, 1 = green.
  * Green is used in Merasmus when he hides and cannot be attacked.
- *
  * @param {integer} color 0 for blue, 1 for green
  */
-function SetBarColor(color = 0)
-{
-    if (IsBarValid())
-    {
-        NetProps.SetPropInt(bar, "m_iBossState", color);
-    }
+function SetBarColor(color = 0) {
+	if (IsBarValid()) {
+		NetProps.SetPropInt(bar, "m_iBossState", color);
+	}
 }
 
 
@@ -241,46 +312,35 @@ function SetBarColor(color = 0)
  * --------------------------------------------------------------------------------
  */
 
-function Clamp(value, min, max)
-{
-    if (value <= min)
-    {
+function Clamp(value, min, max) {
+	if (value <= min) {
 		value = min;
-    }
-	else if (value >= max)
-    {
+	} else if (value >= max) {
 		value = max;
-    }
+	}
 
-    return value;
+	return value;
 }
 
 /**
  * Return an array of players on a team, optionally only those alive
- *
  * @param {number} team - Team number
  * @param {bool} alive - Only return alive players
  * @returns {array} - Array of player handles
-*/
-function GetTeamPlayers(team, alive = false)
-{
+ */
+function GetTeamPlayers(team, alive = false) {
 	local players = [];
-    local maxclients = MaxClients();
+	local maxclients = MaxClients();
 
-	for (local i = 1; i <= maxclients; i++)
-	{
+	for (local i = 1; i <= maxclients; i++) {
 		local player = PlayerInstanceFromIndex(i);
 
 		if (player == null) continue;
 
-		if (player.GetTeam() == team)
-		{
-			if (alive == true && player.IsAlive())
-			{
+		if (player.GetTeam() == team) {
+			if (alive == true && player.IsAlive()) {
 				players.push(player);
-			}
-			else if (alive == false)
-			{
+			} else if (alive == false) {
 				players.push(player);
 			}
 		}
@@ -291,11 +351,9 @@ function GetTeamPlayers(team, alive = false)
 
 /**
  * Checks if a player is alive
- *
  * @param {player} player - Handle to the player
  * @returns {bool} - True if the player is alive, false otherwise
-*/
-function IsPlayerAlive(player)
-{
+ */
+function IsPlayerAlive(player) {
 	return NetProps.GetPropInt(player, "m_lifeState") == 0;
 }
