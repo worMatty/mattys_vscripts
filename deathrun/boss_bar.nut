@@ -243,7 +243,7 @@ function GetMembersData() {
 			if (NetProps.HasProp(ent, "m_iMaxHealth")) { // todo: does every entity that has m_iHealth also have m_iMaxHealth?
 				data.max_health += ent.GetMaxHealth();
 			} else {
-				data.max_health += ent.Gethealth();
+				data.max_health += ent.GetHealth();
 			}
 		}
 
