@@ -56,21 +56,37 @@ function TeleportStuff(targets, destinations, respawn = true, grid = true) {
 	local teleported = 0;
 
 	// one destination, optionally in formation
-	if (destinations.len() == 1 && grid == true) {
+	if (destinations.len() == 1) {
 		local destination = destinations.pop();
-		local rows = ceil(sqrt(targets.len())).tointeger();
-		local offset = ((rows * option_grid_spacing) / 2) - (option_grid_spacing / 2);
-
 		local origin = destination.GetOrigin();
-		origin = Vector(origin.x - offset, origin.y + offset, origin.z);
 		local angles = destination.GetAbsAngles();
 
-		// column
-		for (local i = 0; i < rows && targets.len(); i++) {
-			// row
-			for (local j = 0; j < rows && targets.len(); j++) {
-				local new_origin = Vector(origin.x + (option_grid_spacing * j), origin.y - (option_grid_spacing * i), origin.z);
-				local target = targets.pop();
+		if (targets.len() > 1 && grid == true) // more than one target in grid formation
+		{
+			local rows = ceil(sqrt(targets.len())).tointeger();
+			local offset = ((rows * option_grid_spacing) / 2) - (option_grid_spacing / 2);
+			origin = Vector(origin.x - offset, origin.y + offset, origin.z);
+
+			// column
+			for (local i = 0; i < rows && targets.len(); i++) {
+				// row
+				for (local j = 0; j < rows && targets.len(); j++) {
+					local new_origin = Vector(origin.x + (option_grid_spacing * j), origin.y - (option_grid_spacing * i), origin.z);
+					local target = targets.pop();
+					if (target instanceof CTFPlayer && !target.IsAlive()) {
+						if (respawn) {
+							target.ForceRespawn();
+						} else {
+							continue;
+						}
+					}
+					target.Teleport(true, new_origin, true, angles, false, Vector());
+					teleported++;
+				}
+			}
+		} else // boring single location
+		{
+			foreach(target in targets) {
 				if (target instanceof CTFPlayer && !target.IsAlive()) {
 					if (respawn) {
 						target.ForceRespawn();
@@ -78,12 +94,11 @@ function TeleportStuff(targets, destinations, respawn = true, grid = true) {
 						continue;
 					}
 				}
-				target.Teleport(true, new_origin, true, angles, false, Vector());
+				target.Teleport(true, origin, true, angles, false, Vector());
 				teleported++;
 			}
 		}
-	} else
-	// multiple destinations
+	} else // multiple destinations
 	{
 		// randomise destination array if fewer targets than destinations
 		if (targets.len() < destinations.len() && option_shuffle_destinations) {
