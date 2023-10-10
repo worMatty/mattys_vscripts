@@ -42,6 +42,7 @@ The only option available appears to be to put the phrases in a script and load 
 local phrases = {
 	example = "This is an\nexample phrase"
 	kill_silently = "Kill\nsilently"
+	long = "Terminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\n"
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -52,6 +53,7 @@ function SetMessage(message) {
 	EntFireByHandle(self, "AddOutput", format("message %s", message), -1, activator, caller);
 	// EntFireByHandle(self, "CallScriptFunction", "PostSetMessage", 0.0, activator, caller);
 }
+// todo: Check for phrases
 
 function OnPostSpawn() {
 	local message = NetProps.GetPropString(self, "m_szText");

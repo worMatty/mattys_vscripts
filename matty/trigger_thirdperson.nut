@@ -29,7 +29,7 @@ function Output_OnEndTouch() {
 
 	if (index != null) {
 		already_ftc.remove(index);
-	} else if (activator.IsValid()) // account for disconnecting players
+	} else if (activator != null && activator.IsValid()) // account for disconnecting players
 	{
 		EntFireByHandle(activator, "SetForcedTauntCam", "0", 0.0, activator, caller);
 	}

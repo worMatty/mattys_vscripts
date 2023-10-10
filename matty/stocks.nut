@@ -208,6 +208,23 @@ foreach (key, value in Constants.ETFTeam)
 	return players;
 }
 
+/**
+ * Randomise an array
+ * @param {array} array Input array
+ * @return {array} Input values in a different order
+ */
+function RandomiseArray(array) {
+	local new_array = [];
+
+	while (array.len() > 0) {
+		local index = RandomInt(0, array.len() - 1);
+		new_array.push(array[index]);
+		array.remove(index); // note: remove() returns the value.
+	}
+
+	return new_array;
+}
+
 
 // Player
 // --------------------------------------------------------------------------------
