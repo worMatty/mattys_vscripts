@@ -14,7 +14,7 @@ const chat_color_blue = 0x99CCFF;
 
 hud_chat <- Constants.EHudNotify.HUD_PRINTTALK;
 
-maxclients <- MaxClients();
+::maxclients <- MaxClients();
 
 // TEAM_UNASSIGNED				0
 // TEAM_SPECTATOR				1

@@ -1,5 +1,6 @@
 /**
  * Matty's Universal Teleporter v0.2
+ * Designed to be included by matty/stocks/globals.nut
  *
  * Teleport any entity or array of entities to one or more destinations.
  * Optionally arrange in a grid around a single destination (on by default).
@@ -19,20 +20,62 @@
  * TeleportStuff(array_of_targets, array_of_destinations)		// teleport an array of targets to an array of destinations
  */
 
-IncludeScript("matty/stocks.nut");
-
-local option_grid_spacing = 64.0; // space between entities in grid formation
-local option_shuffle_destinations = true; // shuffle destinations when they surpass targets
-
 /**
  * Teleport one or more entities to one or more destination entities.
  * If using a target or classname, it will find all instances.
+ * If using a team number, dead players will be filtered out of the final results if respawn == false.
+ * Grid arrangement of players only occurs when there is a single destination.
  * @param {any} targets Team number, entity instance, array of entities, targetname, classname
- * @param {any} destinations Instance or targetname of destination entity
+ * @param {any} destinations Instance or targetname string of destination entity or entities
  * @param {bool} respawn Optionally respawn any dead players before teleporting
  * @return {number} Number of entities teleported
  */
-function TeleportStuff(targets, destinations, respawn = true, grid = true) {
+::TeleportStuff <-  function(targets, destinations, respawn = false, grid = true) {
+	local option_grid_spacing = 64.0; // space between entities in grid formation
+	local option_shuffle_destinations = true; // shuffle destinations when they surpass targets
+
+	/**
+	 * Process the input and produce an array of teleport targets or destinations.
+	 * Accepts an array of entity instances, an entity instance, a targetname or classname string, or team integer.
+	 * @param {any} input Input value for the teleport target(s) or destination(s)
+	 * @return {array} Array of teleport targets or destinations
+	 */
+	local ProcessInput = function(input) {
+		local output = [];
+
+		// array
+		if (typeof input == "array" && input.len() > 0) {
+			output = input;
+		}
+		// instance entity
+		else if (typeof input == "instance" && input.IsValid()) {
+			output.push(input);
+		}
+		// string targetname & classname
+		else if (typeof input == "string") {
+			local ent = null;
+			while (ent = Entities.FindByName(ent, input)) {
+				output.push(ent);
+			}
+			if (output.len() == 0) {
+				while (ent = Entities.FindByClassname(ent, input)) {
+					output.push(ent);
+				}
+			}
+		}
+		// integer
+		else if (typeof input == "integer") {
+			// output = GetTeamPlayers(input);
+			output = Players().Team(input).Array();
+		}
+		// Players instance
+		else if (input instanceof Players) {
+			output = input.Array();
+		}
+
+		return output;
+	}
+
 	targets = ProcessInput(targets);
 	destinations = ProcessInput(destinations);
 
@@ -49,19 +92,20 @@ function TeleportStuff(targets, destinations, respawn = true, grid = true) {
 
 	// exit early if no targets or destinations
 	if (destinations.len() == 0 || targets.len() == 0) {
-		printl(self + " destinations.len() = " + destinations.len() + " targets.len() = " + targets.len());
+		printl("TeleportStuff -- Destinations or targets not found. Destinations: " + destinations.len() + " Targets: " + targets.len());
 		return;
 	}
 
 	local teleported = 0;
 
-	// one destination, optionally in formation
+	// there is only one destination
 	if (destinations.len() == 1) {
 		local destination = destinations.pop();
 		local origin = destination.GetOrigin();
 		local angles = destination.GetAbsAngles();
 
-		if (targets.len() > 1 && grid == true) // more than one target in grid formation
+		// teleport multiple targets into grid formation around destination
+		if (targets.len() > 1 && grid == true)
 		{
 			local rows = ceil(sqrt(targets.len())).tointeger();
 			local offset = ((rows * option_grid_spacing) / 2) - (option_grid_spacing / 2);
@@ -84,7 +128,10 @@ function TeleportStuff(targets, destinations, respawn = true, grid = true) {
 					teleported++;
 				}
 			}
-		} else // boring single location
+		}
+
+		// teleport all targets to the same point
+		else
 		{
 			foreach(target in targets) {
 				if (target instanceof CTFPlayer && !target.IsAlive()) {
@@ -98,7 +145,10 @@ function TeleportStuff(targets, destinations, respawn = true, grid = true) {
 				teleported++;
 			}
 		}
-	} else // multiple destinations
+	}
+
+	// there are multiple destinations
+	else
 	{
 		// randomise destination array if fewer targets than destinations
 		if (targets.len() < destinations.len() && option_shuffle_destinations) {
@@ -123,103 +173,24 @@ function TeleportStuff(targets, destinations, respawn = true, grid = true) {
 		}
 	}
 
+	// return number of targets teleported
 	return teleported;
 }
 
-/**
- * Process the input and produce an array of teleport targets or destinations.
- * Accepts an array of entity instances, an entity instance, a targetname or classname string, or team integer.
- * @param {any} input Input value for the teleport target(s) or destination(s)
- * @return {array} Array of teleport targets or destinations
- */
-function ProcessInput(input) {
-	local output = [];
-
-	// array
-	if (typeof input == "array" && input.len() > 0) {
-		output = input;
-	}
-	// instance entity
-	else if (typeof input == "instance" && input.IsValid()) {
-		output.push(input);
-	}
-	// string targetname & classname
-	else if (typeof input == "string") {
-		local ent = null;
-		while (ent = Entities.FindByName(ent, input)) {
-			output.push(ent);
-		}
-		if (output.len() == 0) {
-			while (ent = Entities.FindByClassname(ent, input)) {
-				output.push(ent);
-			}
-		}
-	}
-	// integer
-	else if (typeof input == "integer") {
-		output = GetTeamPlayers(input);
-	}
-
-	return output;
-}
-
-
 
 /**
- * 11. Teleport players at random around a point, rounded to a ^2 grid value, avoiding overlapping
- * 12. Teleport players with a certain table slot value.
- *
- * Combine functions into one
- * Check typeof incoming destination
- * If string, get instance or array of instances
- * If instance...
- * If array...
- * When using the thing, check if array or instance.
- * If array, teleport to each destination entity.
- * If instance, don't.
- * Optionally teleport in grid formation
  * Optionally use landmark style teleportation, if a landmark is specified
  * Use a table for options
- * Make respawn dead an option
  * Integrate PlayerLists.
+ *
+ * Teleport into circular formation around a destination?
+ * 		teleport a set distance from a destination with an angle that's a fraction of a circle
+ *		e.g. teleport 64  units from centre at 0, 90, 180, 270
+ *  	teleport 128 units from centre at 0, 45, 90, 135, 180, etc.
+ *
+ * Grid todo
+ * 		add min and max bounds for square
+ * 		account for more than 32 players
+ * 		support a ratio of rows to columns for a wide group
+ * 		convert local origin to absolute origin somehow to allow for diagonal grids
  */
-
-// optionally respawn dead players
-
-// teleport some players somewhere and others somewhere else
-// put them in different arrays?
-
-// teleport players until destinations are full -- aka a set number of players
-// how to select players?
-
-// teleport !activator one place and the rest of the team somewhere else
-
-// create array using filters?
-// supply a filter argument, perhaps in the form of a function
-// a filter could be a radius check or volume check
-
-// teleport into grid formation around a destination
-
-// teleport into circular formation around a destination
-
-// teleport a set distance from a destination with an angle that's a fraction of a circle
-// e.g. teleport 64  units from centre at 0, 90, 180, 270
-//      teleport 128 units from centre at 0, 45, 90, 135, 180, etc.
-
-// get number of players
-// calculate optimal number of rows and columns
-// calculate length of a row and column in units by multiplying 64 * length
-// get center position by dividing by 2
-
-// use info_team_spawn configuration
-
-// teleport but retain stuff relative to landmark
-// has to be done when players are inside a trigger
-// unless we can use a source entity landmark
-// look at the code for this ent
-
-// grid todo
-// add min and max bounds for square
-// account for more than 32 players
-// support a ratio of rows to columns for a wide group
-// convert local origin to absolute origin somehow to allow for diagonal grids

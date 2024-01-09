@@ -4,6 +4,8 @@
 
 	Attach to a logic_script
 	Designed to be reloaded on round restart
+
+	Old version
 */
 
 IncludeScript("matty/stocks.nut");

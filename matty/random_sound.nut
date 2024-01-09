@@ -17,19 +17,22 @@ local sounds = [
 ];
 
 // this will precache the sounds
-function Precache() {
-	foreach(sound in sounds) {
-		PrecacheSound(sound); // precaches raw sounds
-	}
+foreach(sound in sounds) {
+	PrecacheSound(sound); // precaches raw sounds
 }
 
 // this is the function you call to play a sound
-function PlayRandomSound(entity) {
+// if you don't specify an entity, the receiving entity will be used
+function PlayRandomSound(entity = null) {
 	if (sounds.len() == 0) {
 		return; // don't do anything if the sounds array is empty
 	}
 
 	local sound = sounds[RandomInt(0, sounds.len() - 1)];
+
+	if (entity == null) {
+		entity = self;
+	}
 
 	entity.EmitSound(sound);
 }

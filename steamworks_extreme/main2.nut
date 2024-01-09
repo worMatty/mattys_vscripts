@@ -19,54 +19,35 @@
                                            ███    ███
  */
 
-IncludeScript("matty/player_lists.nut");
 IncludeScript("matty/stocks2.nut");
 
-// Constants
+// Steamworks Extreme 'class'
 // --------------------------------------------------------------------------------
 
-// global
+::swe <- {
+	phrases = {
+		ta_lhc_button = "Hit this button to take the\nLow Health Challenge!"
+		blue_walk_forwards = "Walk forwards to play the map normally, or hit the Auto Mode button. Choose within fifteen seconds"
+		five_seconds_choose = "You have five seconds left to choose!"
+		waiting_blue_choose = "Waiting for Blue to choose the course mode..."
+		times_up_picking = "Time's up! Picking a mode randomly"
+	}
 
+	function ClearLowHealthChallenge() {
+		for (local i = 1; i <= maxclients; i++) {
+			local player = PlayerInstanceFromIndex(i);
 
-// enum CourseMode {
-// 	Unselected,
-// 	Manual,
-// 	Auto
-// }
-
-// local
-// local roundstate_stalemate = Constants.ERoundState.GR_STATE_STALEMATE;
-local maxclients = MaxClients();
-local course_timer_name = "round_timer";
-
-
-// Variables
-// --------------------------------------------------------------------------------
-
-::swe <- {}; // global table of map-specific stuff
-
-
-// Sounds
-// --------------------------------------------------------------------------------
-
-::swe.sounds <- {
-	notify = "steamworks_extreme/ui/red_eclipse/shockdamage.mp3"
-}
-
-foreach(name, path in swe.sounds) {
-	PrecacheSound(path);
+			if (player != null && player.IsValid()) {
+				if (player.IsOnLHC(true)) {
+					player.SetLHC(false);
+				}
+			}
+		}
+	}
 };
 
 
-// Phrases
-// --------------------------------------------------------------------------------
-
-::swe.phrases <- {
-	ta_lhc_button = "Hit this button to take the\nLow Health Challenge!"
-};
-
-
-// Deathrun Class
+// Deathrun 'Class'
 // --------------------------------------------------------------------------------
 
 ::CourseMode <- {
@@ -76,43 +57,87 @@ foreach(name, path in swe.sounds) {
 };
 
 ::Deathrun <- {
-	roundstate_stalemate = Constants.ERoundState.GR_STATE_STALEMATE
-
 	course_active = false
 	ending_active = false
 	course_mode = CourseMode.Unselected
 
+	// debugging - not reset on round restart
+	motivator_enabled = true
+	show_state_message = false
+
+	// check course state
 	function IsCourseActive() {
-		return (GetRoundState() == roundstate_stalemate && course_active == true);
+		return (GetRoundState() == GR_STATE_STALEMATE && course_active == true);
 	}
 
 	function IsEndingActive() {
-		return (GetRoundState() == roundstate_stalemate && ending_active == true);
+		return (GetRoundState() == GR_STATE_STALEMATE && ending_active == true);
 	}
 
 	function IsAutoMode() {
 		return (course_mode == CourseMode.Auto);
 	}
 
+	function IsManualMode() {
+		return (course_mode == CourseMode.Manual);
+	}
+
+	function IsModeSelected() {
+		return (course_mode != CourseMode.Unselected);
+	}
+
 	function SetCourseMode(mode) {
 		course_mode = mode;
 	}
 
+	// set course state
+	function EndingChosen() {
+		ending_active = true;
+		if (show_state_message) printl("Deathrun: An ending has been chosen");
+	}
+
+	// forwards
 	function EndCourse() {
 		course_active = false;
 		EntFire("relay_course_stop", "Trigger");
+		if (show_state_message) printl("Deathrun: Course ended");
 	}
 
-	function EndingChosen() {
-		ending_active = true;
+	// debugging
+	function IsMotivatorEnabled() {
+		return (motivator_enabled);
 	}
 
 	// events
+	function RoundRestart() {
+		if (show_state_message) printl("Deathrun: Round restarted");
+
+		course_active = false;
+		ending_active = false;
+		course_mode = CourseMode.Unselected;
+
+		// reset players
+		for (local i = 1; i <= maxclients; i++) {
+			local player = PlayerInstanceFromIndex(i);
+
+			if (player != null) {
+				player.RoundReset();
+			}
+		}
+	}
+
 	function RoundStart() {
+		if (show_state_message) printl("Deathrun: Round started");
+
 		if (Players().Team(TF_TEAM_RED).players.len() && Players().Team(TF_TEAM_BLUE).players.len()) {
 			course_active = true;
 			EntFire("relay_round_start", "Trigger");
 		}
+	}
+
+	function RoundWin() {
+		if (show_state_message) printl("Deathrun: Round won");
+		EntFire("relay_motivator_stop", "Trigger");
 	}
 
 	function PlayerDeath(params) {
@@ -165,10 +190,12 @@ local player_methods_properties = {
 	ToggleLHC = function() {
 		if (IsOnLHC() == false) {
 			SetLHC(true);
-			Message.Chat.Client(this, "You have accepted the low health challenge. Good luck!");
+			// Message.Chat.Client(this, "You have accepted the low health challenge. Good luck!");
+			ChatMsg(this, "You have accepted the low health challenge. Good luck!");
 		} else {
 			SetLHC(false);
-			Message.Chat.Client(this, "You are no longer on the low health challenge");
+			// Message.Chat.Client(this, "You are no longer on the low health challenge");
+			ChatMsg(this, "You are no longer on the low health challenge");
 		}
 	}
 
@@ -214,9 +241,11 @@ local player_methods_properties = {
 			HasReachedEnd(true);
 
 			if (IsOnLHC()) {
-				Message.Chat.All(this.ColoredName() + " finished while on the Low Health Challenge!");
+				// Message.Chat.All(this.CName() + " finished while on the Low Health Challenge!");
+				ChatMsg(null, this.CName() + " finished while on the Low Health Challenge!");
 			} else {
-				Message.Chat.All(this.ColoredName() + " reached the end of the course!");
+				// Message.Chat.All(this.CName() + " reached the end of the course!");
+				ChatMsg(null, this.CName() + " reached the end of the course!");
 			}
 
 			DisplayCourseTime();
@@ -224,10 +253,11 @@ local player_methods_properties = {
 	}
 
 	DisplayCourseTime = function(timer_name = "round_timer") {
-		local time = GetRoundTimeElapsed();
+		local time = GetRoundTimeElapsed(timer_name);
 
 		if (time != null) {
-			Message.Chat.Client(this, format("Your time was %d:%d", time.minutes, time.seconds));
+			// Message.Chat.Client(this, format("Your time was %d:%d", time.minutes, time.seconds));
+			ChatMsg(this, format("Your time was %d:%d", time.minutes, time.seconds));
 		}
 	}
 }
@@ -239,73 +269,77 @@ foreach(key, value in player_methods_properties) {
 	}
 }
 
-// Player
+// Helper functions
 // --------------------------------------------------------------------------------
 
-function ClearLowHealthChallenge() {
-	for (local i = 1; i <= maxclients; i++) {
-		local player = PlayerInstanceFromIndex(i);
+/**
+ * Divide the live red players into two or more groups for use in minigames
+ * Shuffles the players before putting them in their groups.
+ * @param {integer} number_of_groups The number of groups
+ * @param {bool} activator_in_first If true, place the activator in index 0 of the first group
+ * @return {array} An array of arrays containing players
+ */
+function DivideReds(number_of_groups = 2, activator_in_first = true) {
+	local players = Players().Team(TF_TEAM_RED).Alive().Shuffle();
 
-		if (player != null && player.IsValid()) {
-			if (player.IsOnLHC(true)) {
-				player.SetLHC(false);
-			}
-		}
+	if (activator_in_first && players.ContainsPlayer(activator) != null) {
+		players.Exclude(activator).Array().insert(0, activator);
 	}
+
+	return players.Divide(number_of_groups);
 }
 
-function GetRoundTimeElapsed(timer_name = course_timer_name) {
-	local timer = Entities.FindByName(null, timer_name);
-
-	if (timer != null) {
-		local time_remaining = NetProps.GetPropFloat(timer, "m_flTimeRemaining") + 1;
-		local end_time = NetProps.GetPropFloat(timer, "m_flTimerEndTime");
-		local time = Time();
-		local time_elapsed = time_remaining - (end_time - time);
-		local minutes = abs(time_elapsed / 60);
-		local seconds = abs(time_elapsed % 60);
-
-		return {
-			minutes = minutes,
-			seconds = seconds
-		};
+/**
+ * Split live red players into two groups
+ * Specify the size of group 1 and all remaining players go into group 2
+ * Used when teleporting players to the active and spectator areas of a minigame
+ * @param {integer} group1_size Size of group 1
+ * @param {bool} activator_in_first Position the activator at index 0 of the first group's array
+ * @return {table} Table of arrays in this format: groups.group1/group2
+ */
+function ApportionReds(group1_size, activator_in_first = true) {
+	local groups = {
+		group1 = []
+		group2 = []
 	}
 
-	return null;
+	local players = Players().Team(TF_TEAM_RED).Alive().Shuffle();
+
+	if (activator_in_first && players.ContainsPlayer(activator) != null) {
+		players.Exclude(activator).Array().insert(0, activator);
+	}
+
+	groups.group1 = players.RemovePlayers(group1_size);
+	groups.group2 = players.Array();
+
+	return groups;
+
+	// printl("Group 1 size is " + groups.group1.len());
+	// printl("Group 2 size is " + groups.group2.len());
+
+	// printl("Dumping group 1");
+	// DumpObject(groups.group1);
+
+	// printl("Dumping group 2");
+	// DumpObject(groups.group2);
 }
 
 
 // Hooks
 // --------------------------------------------------------------------------------
 
-CleanGameEventCallbacks();
+// Old events are cleaned by stocks2.nut
 
-function OnPostSpawn() {
-	for (local i = 1; i <= maxclients; i++) {
-		local player = PlayerInstanceFromIndex(i);
-
-		if (player != null) {
-			player.RoundReset();
-		}
-	}
+function OnGameEvent_teamplay_round_start(params) {
+	::Deathrun.RoundRestart();
 }
-
-/**
- * Set up a player's script scope and round flags when they first spawn
- */
-// function OnGameEvent_player_initial_spawn(params) {
-// 	local player = PlayerInstanceFromIndex(params.index);
-
-// 	if (player != null && player.IsValid()) {
-// 		player.ValidateScriptScope();
-// 		foreach(key, value in player_methods_properties) {
-// 			player.GetScriptScope()[key] <- value;
-// 		}
-// 	}
-// }
 
 function OnGameEvent_arena_round_start(params) {
 	::Deathrun.RoundStart();
+}
+
+function OnGameEvent_teamplay_round_win(params) {
+	::Deathrun.RoundWin();
 }
 
 function OnGameEvent_player_death(params) {

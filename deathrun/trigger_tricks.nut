@@ -1,5 +1,12 @@
 /**
- * Trigger tricks!
+ * Trigger tricks! v0.1
+ *
+ * Do stuff to players inside this trigger.
+ *
+ * Usage:
+ * Add this script to the trigger's scripts.
+ * Check the below functions to see what you can do.
+ * Call `CallScriptFunction <function>` to do it.
  */
 
 /**
@@ -8,27 +15,23 @@
  * the players. e.g. worldspawn
  */
 
-// ----------------------------------------------------------------------------------------------------
-
-local debug = false; // prints debug text to console
-
-players <- [];
-self.ConnectOutput("OnStartTouch", "OnStartTouch");
-self.ConnectOutput("OnEndTouch", "OnEndTouch");
-
-local worldspawn = Entities.FindByClassname(null, "worldspawn");
 
 // Functions which affect players in the volume
 // ----------------------------------------------------------------------------------------------------
 
-// kill players by applying damage equal to their health
+/**
+ * Kill players
+ * Works by applying damage equal to their health
+ */
 function KillPlayers() {
 	foreach(player in players) {
 		KillPlayer(player);
 	}
 }
 
-// remove the players from life discreetly
+/**
+ * Kill players 'silently' with no death noises
+ */
 function KillPlayersSilently() {
 	foreach(player in players) {
 		KillPlayerSilently(player);
@@ -36,9 +39,11 @@ function KillPlayersSilently() {
 }
 
 /**
- * Stun players within the volume
- * The slow percentage treats all players as if their run speed is 450.
- * A slow percentage of 50% would set the players' run speed to 225.
+ * Stun or slow players within the volume
+ * Uses a trigger_stun and supports different types of stun.
+ * The slow_percentage doesn't scale run speed by the player's maximum run speed.
+ * Their class or buffs don't matter. All players are treated as if their max
+ * run speed is 450, so a slow_percentage of 0.5 would be 225 run speed.
  * @param {float} duration Stun duration
  * @param {integer} type Type of stun. 0 = slow only. 1 = Sandman stun (unable to move). 2 = scared
  * @param {float} slow_percentage Amount of percentage speed reduction. 1.0 is 100%. Not relevant with type 1
@@ -53,9 +58,12 @@ function StunPlayers(duration = 5.0, type = 1, slow_percentage = 1.0) {
 	EntFireByHandle(stunner, "Kill", "", 0.0, activator, caller);
 }
 
-// an alternative to KillPlayers which uses a trigger_hurt
-function HurtPlayers(damage = 1000) {
-	local hurt = CreateHurtTrigger(damage);
+/**
+ * Kill players using a trigger_hurt instead of by applying damage
+ * @param {integer} damage Damage to apply every 0.5s
+ */
+function HurtPlayers(damage = 500) {
+	local hurt = CreateHurtTrigger(damage * 2);
 
 	foreach(player in players) {
 		EntFireByHandle(hurt, "EndTouch", "", 0.0, player, player);
@@ -63,6 +71,18 @@ function HurtPlayers(damage = 1000) {
 
 	EntFireByHandle(hurt, "Kill", "", 0.0, null, null);
 }
+
+
+// Nothing useable below here
+// ----------------------------------------------------------------------------------------------------
+
+local debug = false; // prints debug text to console
+
+players <- [];
+self.ConnectOutput("OnStartTouch", "OnStartTouch");
+self.ConnectOutput("OnEndTouch", "OnEndTouch");
+
+local worldspawn = Entities.FindByClassname(null, "worldspawn");
 
 
 // Functions used by the above

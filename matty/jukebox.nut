@@ -1,353 +1,535 @@
 /**
- * Jukebox
- * -------
+ * Jukebox v0.2.1 by worMatty
  *
- * Work-in-progress ambient_generic music controller.
+ * Features:
+ * * Simplifies the playing of music track playlists
+ * * Stores playlists globally so tracks do not repeat
+ * * Optionally shuffle the playlist on load and cycle through it
+ * * Precaches all music files for you
+ * * Only spawns one ambient_generic while playing
+ * * Replays a track when it finishes, without needing to use a wave file and cue point
+ * * Loads playlists from a separate file
+ * * Prints track name to chat on play (leave the 'name' field blank to stop this)
+ *
+ * Usage:
+ * 1. Add jukebox.nut to a logic_script, and any playlist files *after* it.
+ *    Playlist files can live anywhere and be named anything.
+ * 	  e.g. mapname/playlists.nut, mapname_music.nut
+ * 2. To play the next track in a playlist, do
+ * 		RunScriptCode worldspawn jukebox.PlayNext(`playlist_name`)
+ *    Any currently playing track will be stopped automatically.
+ * 	  This function loads the specified playlist into the jukebox.
+ *    Subsequent playing functions use the loaded playlist when none is specified.
+ * 3. To stop the jukebox, do
+ * 		RunScriptCode worldspawn jukebox.Stop()
+ * 	  Alternatively, fade out the current track using
+ * 		RunScriptCode worldspawn jukebox.FadeOut(3.0)
+ *
+ * Music tracks are stopped on round restart by the game because they are played using
+ * an ambient_generic (named `jukebox`). This is by design.
+ * Sound files are played through the music channel by the script. It does this by
+ * prefixing the filepath with '#'. You should not add this character yourself.
+ * However, if you use a soundscript sound, you need to add the '#' in the soundscript.
+ *
+ * More functions and arguments:
+ * PlayNext() with no arguments
+ * 		Play the next track in the currently loaded playlist.
+ * 		If there is no playlist loaded, a random track from a playlist will be played.
+ * PlayTrack(track, playlist)
+ * 		Specify a track by instance, number or `search string`.
+ * 		The second argument, 'playlist', is optional. If not specified,
+ * 		the currently-loaded playlist will be used.
+ * 		A track's number is the same as its position in the playlist file, beginning with 1.
+ * 		There needs to be a playlist loaded to use a track number.
+ * 		String search will check track filename, soundname and name, and is case-sensitive.
+ * 		If not found in loaded playlist, or no playlist is loaded, it will check all playlists.
+ * PlaySomething()
+ * 		Pick a random track from a playlist and play it. There is no repeat protection.
+ * FadeOut(duration)
+ * 		Fade the currently playing track out over the specified number of seconds. Takes a float.
+ * Please see the ::jukebox table functions below for full details.
  */
 
+/*
+Changes:
+0.2.1
+Better documentation
+Removed PlaySomething() and the failsafe which played *any* track when you tried to PlayNext() with
+no playlist loaded.
+Removed PlayPlaylist() in favour of just PlayNext().
+Added return Track instance to PlayNext().
+Added return Track instance to PlayTrack().
+Removed last_played time from tracks as it wasn't used.
+Added a string type check to the Track constructor for the 'name' slot.
 
-/* Inputs
-------
-Pick a random track
-Pick tracks sequentially
-Pick a track based on intensity
-Pick a specific track
-Pick a track randomly based on weighting per track
-Fade in / out (if ambient_generic)
-Stop
-Set volume of track / fade to volume / 'duck' for a time and volume
-
-Settings
---------
-Loop same
-Play next automatically
-Stop after finishing
-Use specific channel
-
-Required data
--------------
-Track length
-Sound file name / soundscript entry name
-
-Possible approaches
--------------------
-Each player has their own jukebox
-Spawns ambient_generic for fading in and out
-Put tracks into albums (sets)
-
-Investigate
------------
-Playing a sound from a certain point
-    - Grab the client command and look at the code for it
-is it possible to stop a sound? */
-
-
-/**
- * Notes
- *
- * It may be better to set these ambient_generics as 'NOT looping' and use 'Is Active' as their playing state.
- * Setting it to true when we start it and false when we stop it. The game should stop it itself when round restarts.
- * Update: If a n on-looping sound is 'active' it will not play. It needs to be looping to use that.
- * I suggest setting active to false when fading out and stopping.
- *
- * Consider adding Play inputs and stuff to the ambient_generic itself via entity script or attach to class.
- * We might be able to do that in this script.
- *
- * Consider spawning a logic_relay for queuing and cancelling timed outputs
- */
-
-/**
- * Findings
- *
- * A 30.316-second track in 320kbps VBR joint stereo 44.1k MP3 misreported its duration as 13.6215s
- * When compressed to 128 it reported as 10.9971. GoldWave reports this version of the sound as MP3 (ACM)
- * The original is reported as just 'MP3'
- *
- * A 44.1k 128kbps mono sound reported by GoldWave as simply MP3 (no ACM or LAME) seemingly has no trouble with duration
- *
- * Wickot - Substance is reported as 119.839 when in reality it is 5:30.28 (330.28)
- *
- */
+0.2
+Tracks now have a `relay` slot to specify a logic_relay that will be triggered when the track is played.
+Playlists loaded from multiple logic_scripts is now supported.
+New function: PlayTrack() - accepts a track number (integer) or search string.
+Playlist structure has changed. Tracks now live in an array, and there is a shuffle option.
+*/
 
 
 
-tracks <- {};
-default_track_prefix <- "music_*";
-default_fade_time <- 3.0;
-trim_delay <- 0.03;
+// Local stuff - run each round
+// --------------------------------------------------------------------------------
 
-/**
- * Get/set the name of the logic_script entity the script is attached to
- * and store it in a global variable
- */
-function OnPostSpawn()
-{
-    if (self.GetName() == null)
-    {
-        self.KeyValueFromString("targetname", "jukebox");
-    }
+playlists <- {};
 
-    // TODO - construct track list
-    // TODO - ensure track entities are configured correctly (looping flag etc.)
+function OnPostSpawn() {
+	// load playlists from scope if they do not exist
+	foreach(key, value in playlists) {
+		if (!(key in jukebox.playlists)) {
+			local playlist = Playlist(value);
+
+			if (playlist.tracks.len()) {
+				jukebox.playlists[key] <- playlist;
+				printl("Jukebox -- Added playlist '" + key + "'");
+			} else {
+				error("Jukebox -- Playlist contains no tracks: '" + key + "'\n");
+			}
+		}
+	}
+
+	jukebox.RoundReset();
+	self.TerminateScriptScope(); // playlists table no longer needed post import
 }
 
 
-/**
- * Pick and loop play a random track
- *
- * @param {string} targetname Wildcard targetname string to match against
- * @noreturn
- */
-function PlayRandom(targetname = default_track_prefix)
-{
-    local tracks = FindNamedSounds(targetname);
-
-    if (tracks.len())
-    {
-        local index = RandomInt(0, tracks.len() - 1);
-        local track = tracks[index];
-
-        PlayLooping(track);
-    }
-}
-
-// "PlayLooping(null, `music_deathegg`)"
-// "CrossFadeInto(null, `music_theywant`)"
-
-/**
- * Play a music track and set it to play itself again when it finishes.
- * This is accomplished by getting the duration of the sound and adding
- * an output to it set to fire when the time has elapsed. This output calls
- * this script entity with the LoopingTrackFinished function.
- *
- * @param {instance} entity Instance of the sound entity to play
- * @param {string} targetname Wildcard targetname string to match against
- * @noreturn
- */
-function PlayLooping(entity = null, targetname = null)
-{
-    if (targetname != null)
-    {
-        entity = Entities.FindByName(null, targetname);
-    }
-
-    if (entity == null)
-    {
-        printl(self + " -- PlayLooping() called without a valid entity");
-        return;
-    }
-
-    // TODO Stop other tracks
-    FadeOutActive(default_track_prefix, 0.0);
-
-    // Set the track as looping - necessary for the ability to stop it
-    NetProps.SetPropBool(entity, "m_fLooping", true);
-
-    // Playing the sound will set m_fActive to true
-    EntFireByHandle(entity, "PlaySound", "", 0.0, null, null);
-
-    printl(self + " -- Playing sound: " + entity + "  Duration: " + GetEntitySoundDuration(entity));
-    PrintToChatAll(format("Music: %s", entity.GetName()));
-
-    local duration = GetEntitySoundDuration(entity);
-
-    if (duration != 0)
-    {
-        /**
-         * 1. Add an output to the entity which calls the LoopingTrackFinished function after a delay
-         *      the same duration as the track length
-         * 2. When the output is fired, the function checks if the track is still active
-         * 3. if the track is active, it starts it again (best method for looping wavs?)
-         */
-
-        if (EntityOutputs.HasAction(entity, "OnUser1"))
-        {
-            printl(self + " -- PlayLooping -- " + entity + " already has OnUser1 output");
-        }
-        else
-        {
-            EntityOutputs.AddOutput(entity, "OnUser1", self.GetName(), "CallScriptFunction", "LoopingTrackFinished", duration - trim_delay, -1);
-        }
-
-        EntFireByHandle(entity, "FireUser1", "", 0.0, entity, null);
-
-        // TODO Replace 'is active' check with a flag in the script scope so we know we've
-        // stopped it in case it detects activity while being faded out
-        // Or investigate possible use of m_dpv to check if fading
-    }
+// Global stuff - run once
+// --------------------------------------------------------------------------------
+if (("jukebox") in getroottable()) {
+	return;
+	// tip: Type this in server console to fully reset jukebox for testing:
+	// script delete jukebox
 }
 
 /**
- * When a music track has finished, play it from the beginning
- *
- * @noreturn
+ * Jukebox root scope
+ * All the methods, playlists and their tracks are stored in here.
+ * You can see the functions available to you and read how to use them.
  */
-function LoopingTrackFinished()
-{
-    local sound = activator;
+::jukebox <- {
+	playlists = {}
+	playlist = null // loaded playlist
+	sound_ent = null // ambient_generic
+	playing_track = null
 
-    // TODO Check if we're stopping this sound via fadeout so we don't restart it
-    if (IsSoundActive(sound))
-    {
-        printl(self + " -- LoopingTrackFinished -- Restarting " + activator);
-        EntFireByHandle(sound, "StopSound", "", 0.0, null, null);
-        EntFireByHandle(sound, "PlaySound", "", 0.0, null, null);
-        EntFireByHandle(sound, "FireUser1", "", 0.0, sound, null);
-    }
-    else
-    {
-        printl(self + " -- LoopingTrackFinished -- " + activator + " finished and will not be restarted");
-    }
-}
+	/**
+	 * Load and play the next track in the playlist
+	 * That track is then moved to the back of the playlist.
+	 * Uses the currently-loaded playlist if none is specified
+	 * @param {string} _playlist The playlist to play from
+	 * @return {Track} Track instance if one was successfully selected and played, null if not
+	 */
+	function PlayNext(_playlist = null) {
 
-function CrossFadeInto(entity = null, targetname = null, fade_time = default_fade_time)
-{
-    if (targetname != null)
-    {
-        entity = Entities.FindByName(null, targetname);
-    }
+		// specified a playlist
+		if (_playlist != null) {
+			if (!LoadPlaylist(_playlist)) {
+				error("Jukebox -- PlayNext -- Specified playlist not recognised\n");
+				return null;
+			}
+		}
 
-    if (entity == null)
-    {
-        printl(self + " -- CrossfadeInto() called without a valid entity");
-        return;
-    }
+		// use loaded playlist
+		if (playlist != null) {
+			local track = playlist.LoadNextTrack();
+			Play(track);
+			return track;
+		}
 
-    FadeOutActive(default_track_prefix, fade_time);
-    EntFireByHandle(entity, "Volume", "0", fade_time / 2, null, null);
-    EntFireByHandle(entity, "FadeIn", fade_time.tostring(), fade_time / 2, null, null);
-}
+		error("Jukebox -- PlayNext -- No playlist specified or loaded\n");
+		return null;
+	}
+
+	/**
+	 * Play a specific track
+	 * Track number requires a playlist is loaded
+	 * Note: If using a search string, the loaded playlist will be searched,
+	 * and then all others will be searched.
+	 * @param {any} track Takes track instance, track number or search string
+	 * @param {string} _playlist Playlist name to load, or null to use the currently-loaded playlist
+	 * @return {Track} Track instance if one was successfully found and played, null if not
+	 */
+	function PlayTrack(track, _playlist = null) {
+		// track is a track instance
+		if (track instanceof Track) {
+			Play(track);
+			return track;
+		}
+
+		// load playlist if specified
+		if (_playlist != null) {
+			if (!LoadPlaylist(_playlist)) {
+				error("Jukebox -- PlayTrack -- Playlist '" + _playlist + "' not found\n");
+				return null;
+			}
+		}
+
+		// track is an integer (track number)
+		if (typeof track == "integer") {
+
+			// no playlist loaded
+			if (playlist == null) {
+				error("Jukebox -- PlayTrack -- Can't play track number '" + track + "' as no playlist is loaded\n");
+				return null;
+			}
+
+			// track number falls within range
+			if (track > 0 && track <= playlist.tracks.len()) {
+				track = playlist.tracks[track - 1];
+				Play(track);
+				return track;
+			}
+			// track number falls outside range
+			else {
+				error("Jukebox -- PlayTrack -- Track number '" + track + "' falls outside tracklist range\n");
+				return null;
+			}
+		}
+
+		// track is string
+		if (typeof track == "string") {
+			local result = null;
+
+			// search current playlist if loaded
+			if (playlist != null) {
+				result = playlist.FindTrack(track);
+
+				if (result != null) {
+					Play(result);
+					return result;
+				}
+			}
+
+			// search all playlists if none loaded
+			foreach(list in playlists) {
+
+				// skip loaded playlist
+				if (list == playlist) {
+					continue;
+				}
+
+				result = list.FindTrack(track);
+				if (result != null) {
+					break;
+				}
+			}
+
+			if (result != null) {
+				Play(result);
+			} else {
+				error("Jukebox -- PlayTrack -- Could not find track named '" + track + "'\n");
+			}
+
+			return result;
+		}
+	}
+
+	/**
+	 * Stop the current track
+	 */
+	function Stop() {
+		if (sound_ent != null && sound_ent.IsValid()) {
+			EntFireByHandle(sound_ent, "StopSound", null, -1, null, null);
+			AddThinkToEnt(sound_ent, null);
+			sound_ent.Kill();
+		}
+
+		sound_ent = null;
+		playing_track = null;
+	}
+
+	/**
+	 * Fade the current track out over a duration
+	 * Fade out continues to happen even if a new track is played
+	 * @param {float} duration The time it takes to fade out and destroy the ambient_generic
+	 */
+	function FadeOut(duration) {
+		if (sound_ent != null && sound_ent.IsValid()) {
+			AddThinkToEnt(sound_ent, null);
+			EntFireByHandle(sound_ent, "FadeOut", duration.tostring(), -1, null, null);
+			EntFireByHandle(sound_ent, "Kill", null, duration.tostring(), null, null);
+		}
+
+		sound_ent = null;
+		playing_track = null;
+	}
+
+	/**
+	 * Load a playlist into the jukebox
+	 * @param {string} name Name of the playlist
+	 * @return {bool} True if found and loaded, false if not
+	 */
+	function LoadPlaylist(name) {
+		if (name in playlists) {
+			playlist = playlists[name];
+			printl("Jukebox -- LoadPlaylist -- Loaded playlist '" + name + "'");
+			return true;
+		} else {
+			error("Jukebox -- LoadPlaylist -- Playlist not found: " + name + "\n");
+			return false;
+		}
+	}
+
+	/**
+	 * Play a track
+	 * Spawns an ambient_generic if one does not exist.
+	 * Adds a think function to replay if the sound is not a cue point wave.
+	 * @param {Track} track Track instance to play
+	 */
+	function Play(track) {
+		Stop();
+
+		sound_ent = SpawnEntityFromTable("ambient_generic", {
+			targetname = "jukebox"
+			message = (track.soundname != null) ? track.soundname : "#" + track.file
+			spawnflags = 17
+			health = 10
+		});
+
+		EntFireByHandle(sound_ent, "PlaySound", null, -1, null, null);
+		playing_track = track;
+
+		// loop non-looping files
+		if (!track.cue) {
+			AddReplayThink(track);
+		}
+
+		// fire relay if specified
+		if (track.relay) {
+			EntFire(track.relay, "Trigger");
+		}
+
+		// print track name to chat
+		if (track.name) {
+			ClientPrint(null, Constants.EHudNotify.HUD_PRINTTALK, "Now playing: " + track.name);
+		}
+	}
+
+	/**
+	 * Add a think function to the ambient_generic to replay it after the track's duration
+	 */
+	function AddReplayThink(track) {
+		sound_ent.ValidateScriptScope();
+
+		local scope = sound_ent.GetScriptScope();
+
+		scope.played <- Time();
+		scope.length <- track.length + 0.03;
+		scope.Replay <-  function() {
+			local time = Time();
+
+			if (time >= played + length) {
+				EntFireByHandle(self, "StopSound", null, -1, null, null);
+				EntFireByHandle(self, "PlaySound", null, -1, null, null);
+				played = time;
+			}
+
+			return -1;
+		};
+
+		AddThinkToEnt(sound_ent, "Replay");
+	}
+
+	/**
+	 * Reset the variables for loaded track and playlist, and ambient_generic entity
+	 * on round restart
+	 */
+	RoundReset = function() {
+		playlist = null;
+		playing_track = null;
+		sound_ent = null;
+	}
+};
+
 
 /**
- * Stops any active ambient_generics with the given targetname wildcard
+ * Track class
+ * Takes a table with the following parameters
+ * Supply either a soundscript name or file, not both
  *
- * @param {string} targetname Wildcard targetname string to match against
- * @noreturns
+ * {string} soundname   Soundscript name
+ * {string} file        File path and filename relative to tf without # prefix
+ * {float} length       Duration of the track in seconds
+ * {bool} has_cuepoint  If the track is a wave, true if it has a cue point
+ *
+ * @param {table} table Table of values
  */
-function Stop(targetname = default_track_prefix)
-{
-    local entity = null;
+::Track <- class {
+	constructor(table) {
 
-    while (entity = Entities.FindByName(entity, targetname))
-    {
-        if (entity.GetClassname() == "ambient_generic" && IsSoundActive(entity))
-        {
-            EntFireByHandle(entity, "StopSound", "", 0.0, null, null);
-        }
-    }
-}
+		// sound is a soundscript or filename
+		if ("soundname" in table) {
+			soundname = table.soundname;
+			if (!PrecacheScriptSound(soundname)) {
+				error(this + " -- soundscript entry not found: '" + soundname + "'\n");
+				invalid = true;
+			}
+		} else if ("file" in table) {
+			file = table.file;
+			PrecacheSound(file);
+		} else {
+			error(this + " -- track with no soundname or file\n");
+			invalid = true;
+		}
+
+		// cue point waves do not require a length
+		if ("has_cuepoint" in table && table.has_cuepoint == true) {
+			cue = true;
+		} else {
+			if ("length" in table && typeof table.length == "float") {
+				length = table.length
+			} else {
+				error(this + " -- track with no length, or length is not a float\n");
+				invalid = true;
+			}
+		}
+
+		if ("name" in table && typeof table.name == "string") {
+			name = table.name;
+		}
+
+		if ("relay" in table && typeof table.relay == "string") {
+			relay = table.relay;
+		}
+	}
+
+	soundname = null;
+	file = null;
+	length = null;
+	cue = false;
+	name = null;
+	relay = null;
+	invalid = null;
+};
+
 
 /**
- * Scan for all ambient_generics matching the targetname and fade them out
- *
- * @param {string} targetname Wildcard string to match targetnames against
- * @param {float} fade_time Time the sound should take to fade out and stop
- * @noreturn
+ * Playlist class
+ * Takes a playlist table structure!
+ * See playlists.nut for details.
+ * @param {table} table Playlist table structure
  */
-function FadeOutActive(targetname = default_track_prefix, fade_time = default_fade_time)
-{
-    local entity = null;
+::Playlist <- class {
+	constructor(table) {
+		tracks = [];
+		playlist = [];
 
-    // while (entity = Entities.FindByClassname(entity, "ambient_generic"))
-    while (entity = Entities.FindByName(entity, targetname))
-    {
-        if (entity.GetClassname() == "ambient_generic" && IsSoundActive(entity))
-        {
-            printl(self + " -- FadeOutActive -- Fading out " + entity + " over " + fade_time + " seconds");
+		// return if no tracks or list not an array
+		if (!("tracks" in table) || typeof table.tracks != "array") {
+			error("Jukebox -- Playlist -- No track list found in playlist\n");
+			return;
+		}
 
-            // Set the sound as being inactive so our looping code does not restart it
-            // NetProp.SetPropBool(entity, "m_fActive", false);
-            // TODO test if we can still fade it out and stop it if not active
-            // Update: This won't work as StopSound merely sends Toggle
-            EntFireByHandle(entity, "FadeOut", fade_time.tostring(), 0.00, null, null);
-            EntFireByHandle(entity, "StopSound", "", fade_time, null, null);
-        }
-    }
+		foreach(value in table.tracks) {
+			local track = Track(value);
+
+			if (track.invalid == true) {
+				error(this + " -- a track had a problem so wasn't added to a playlist\n");
+				DumpObject(value);
+			} else {
+				tracks.append(track);
+				playlist.append(track);
+			}
+		}
+
+		if ("shuffle" in table && table.shuffle) {
+			ShufflePlaylist();
+		}
+	}
+
+	tracks = null // track list in order they are added, used for numerical selection
+	playlist = null // playlist used for loading a track on a cycle
+
+	/**
+	 * Get the next track from the playlist array
+	 * @return {Track} Track instance
+	 */
+	function LoadNextTrack() {
+		local track = playlist.remove(0);
+		playlist.append(track);
+		return track;
+	}
+
+	/**
+	 * Shuffle the playlist
+	 */
+	function ShufflePlaylist() {
+		local array = [];
+
+		while (playlist.len() > 0) {
+			array.push(playlist.remove(RandomInt(0, playlist.len() - 1)));
+		}
+
+		playlist = array;
+	}
+
+	/**
+	 * Given a search term, checks each track filename, soundname and name
+	 * in that order for a match. Returns the first result it finds.
+	 * @param {string} search_term Case-sensitive search term
+	 * @return {Track} Track instance if found, null if not
+	 */
+	function FindTrack(search_term) {
+		foreach(track in tracks) {
+			if (track.file != null && track.file.find(search_term) != null) {
+				return track;
+			} else if (track.soundname != null && track.soundname.find(search_term) != null) {
+				return track;
+			} else if (track.name != null && track.name.find(search_term) != null) {
+				return track;
+			}
+		}
+
+		return null;
+	}
 }
 
-/**
- * Generate and return an array of ambient_generics matching
- * the targetname wildcard string
- *
- * @param {string} targetname Wildcard targetname string to match against
- * @returns {array} Array of ambient_generic entities matching the targetname
- */
-function FindNamedSounds(targetname)
-{
-    local sounds = [];
-    local entity = null;
 
-    while (entity = Entities.FindByName(entity, targetname))
-    {
-        if (entity.GetClassname() == "ambient_generic")
-        {
-            sounds.push(entity);
-        }
-    }
+// Only development notes below
 
-    return sounds;
-}
-
-/**
- * Display data about all found sounds.
- * Note that duration is not visible unless a client is connected.
- *
- * @noreturn
- */
-function DisplayTrackData()
-{
-    local sounds = FindNamedSounds(default_track_prefix);
-
-    if (sounds.len())
-    {
-        for (local i = 0; i < sounds.len(); i++)
-        {
-            local sound = sounds[i];
-            printl(sound);
-
-            printl("-- Duration: " + GetEntitySoundDuration(sound));
-
-            printl("-- m_dpv type: " + NetProps.GetPropType(sound, "m_dpv"));
-            printl("-- m_dpv size: " + NetProps.GetPropArraySize(sound, "m_dpv"));
-            printl("-- m_dpv string: " + NetProps.GetPropString(sound, "m_dpv"));
-
-            // printl("-- m_dpv 7 (fadein): " + NetProps.GetPropIntArray(sound, "m_dpv", 7));
-            // printl("-- m_dpv 8 (fadeout): " + NetProps.GetPropIntArray(sound, "m_dpv", 8));
-            // printl("-- m_dpv 8 (fadeout float): " + NetProps.GetPropFloatArray(sound, "m_dpv", 8));
-            // printl("-- m_dpv 19 (vol): " + NetProps.GetPropIntArray(sound, "m_dpv", 19));
-            // printl("-- m_dpv int: " + NetProps.GetPropInt(sound, "m_dpv"));
+// Notes about assignment in script root:
+// Defining an array in the root of a script's scope:
+//      array <- []
+//      local array = []
+// Each method works or doesn't work with some stuff?
+// If you define an object or table, use <- without local
+// you must use the table slot operator when defining an instance of a class in script root
 
 
-            // 7 and 8 are fadein and fadeout
-            // 19 is vol
-        }
-    }
-}
+/*
 
-/**
- * Get the duration of a sound/music track
- *
- * @param {instance} entity The instance of the entity
- * @returns {float} Duration of the sound/music track
- */
-function GetEntitySoundDuration(entity)
-{
-    local soundname = NetProps.GetPropString(entity, "m_iszSound");
-    local duration = GetSoundDuration(soundname, "");
+## Behaviour
+* Music is stopped by the game on round restart because we are using ambient_generic
+    We could use EmitSoundEx but we would not be able to fade in or out unless we can change volume?
+    We would need to interpolate and use multiple calls
+* If a music track is not allowed to play for thirty seconds, we will start it again on the next round
+* Three playlist modes: Cycle, shuffle once, random with no recent repeats
 
-    // printl(self + " -- GetEntitySoundDuration -- GetSoundDuration(" + soundname + ") == " + duration);
-    // printl(self + " -- GetEntitySoundDuration -- Entities.GetSoundDuration(" + soundname + ") == " + entity.GetSoundDuration(soundname, ""));
+## Later stuff
+* Holiday playlists
+* Integrate with holidays.nut?
+	* Chance to play seasonal tracks? Fallback to other playlist?
 
-    return duration;
-}
+### Jukebox
+Anti-short round protection options
+1. Replay track if not played for longer than thirty seconds last round
+2. Reposition track in next playlist slot after current round to avoid immediate repeat
 
-/**
- * Check if an ambient_generic is marked as active in its entity properties
- *
- * @param {instance} entity The instance of the entity
- * @returns {bool} True if active, false if not
- */
-function IsSoundActive(entity)
-{
-    return NetProps.GetPropBool(entity, "m_fActive");
-}
+### Playlists
+Track Weighting
+
+### Tracks
+#### Properties
+* Number of times played (full rounds only?)
+* 'Intensity' rating integer
+* Keywords/tags for filtering?
+
+ficool2
+if you want it to loop seamlessly then add a cue point
+otherwise manual looping with vscript can also work but you will need to do ping compensation (otherwise it will be off by ~0.1s)
+and the sound must be marked as streamed (* prefix) to prevent hitching (edited)
+
+*/

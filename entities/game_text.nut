@@ -35,7 +35,6 @@ function PrintToPlayer(player, message) {
 /**
  * Set the message of a game_text and immediately display it to all players.
  * Automatically adjusts and then resets the entity's spawnflags.
- * Pass 'activator' to 'player' to print to !activator
  *
  * @param {string} message - Message to print
  * @noreturn
