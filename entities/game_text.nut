@@ -1,62 +1,73 @@
 /**
  * Functions attached to game_text to make it easier to use
+ * Also works with game_text_tf
  */
-
-maxclients <- MaxClients();
 
 /**
- * Set the message of a game_text and immediately display it
- *
- * @param {string} message - Message to print
- * @noreturn
+ * Display the message
+ * Optionally set a new message at the same time
+ * @param {string} message The new message string
  */
-function DisplayMessage(message) {
-	self.__KeyValueFromString("message", message);
-	EntFireByHandle(self, "Display", null, 0.0, activator, caller);
+function Display(message = null) {
+	if (message != null && typeof message == "string") {
+		EntFireByHandle(self, "AddOutput", "message " + message, -1, activator, caller);
+	}
+
+	EntFireByHandle(self, "Display", null, -1, activator, caller);
 }
 
+DisplayMessage <- Display; // backwards compatability
+
 /**
- * Set the message of a game_text and immediately display it to a specified player.
- * Automatically adjusts and then resets the entity's spawnflags.
- * Pass 'activator' to 'player' to print to !activator
- *
- * @param {player} player - Player instance
- * @param {string} message - Message to print
- * @noreturn
+ * Display the message to a specific player
+ * This is done by temporarily changing the entity's spawnflags
+ * @param {player} player Player instance. Default is activator
+ * @param {string} message Optional new message
  */
-function PrintToPlayer(player, message) {
+function PrintToPlayer(player = null, message = null) {
+	// assign recipient player
+	Assert((player != null || activator != null), "game_text.nut -- PrintToPlayer -- Both 'player' and 'activator' are null. No-one to send message to!");
+	player = (player != null) ? player : activator;
+
+	// set message
+	if (message != null && typeof message == "string") {
+		EntFireByHandle(self, "AddOutput", "message " + message, -1, activator, caller);
+	}
+
 	local spawnflags = NetProps.GetPropInt(self, "m_spawnflags");
-	EntFireByHandle(self, "AddOutput", format("spawnflags %d", ~1 & spawnflags), 0.0, activator, caller);
-	EntFireByHandle(self, "AddOutput", format("message %s", message), 0.0, activator, caller);
-	EntFireByHandle(self, "Display", null, 0.0, activator, caller);
-	EntFireByHandle(self, "AddOutput", format("spawnflags %d", spawnflags), 0.0, activator, caller);
+	EntFireByHandle(self, "AddOutput", format("spawnflags %d", ~1 & spawnflags), -1, activator, caller);
+	EntFireByHandle(self, "Display", null, -1, player, caller);
+	EntFireByHandle(self, "AddOutput", format("spawnflags %d", spawnflags), -1, activator, caller);
 }
 
 /**
- * Set the message of a game_text and immediately display it to all players.
- * Automatically adjusts and then resets the entity's spawnflags.
- *
- * @param {string} message - Message to print
- * @noreturn
+ * Display the message to all players
+ * This is done by temporarily changing the entity's spawnflags
+ * @param {string} message Optional new message
  */
-function PrintToAll(message) {
+function PrintToAll(message = null) {
+	// set message
+	if (message != null && typeof message == "string") {
+		EntFireByHandle(self, "AddOutput", "message " + message, -1, activator, caller);
+	}
+
 	local spawnflags = NetProps.GetPropInt(self, "m_spawnflags");
-	EntFireByHandle(self, "AddOutput", format("spawnflags %d", 1 | spawnflags), 0.0, activator, caller);
-	EntFireByHandle(self, "AddOutput", format("message %s", message), 0.0, activator, caller);
-	EntFireByHandle(self, "Display", null, 0.0, activator, caller);
-	EntFireByHandle(self, "AddOutput", format("spawnflags %d", spawnflags), 0.0, activator, caller);
+	EntFireByHandle(self, "AddOutput", format("spawnflags %d", 1 | spawnflags), -1, activator, caller);
+	EntFireByHandle(self, "Display", null, -1, activator, caller);
+	EntFireByHandle(self, "AddOutput", format("spawnflags %d", spawnflags), -1, activator, caller);
 }
 
 /**
- * Set the message of a game_text and immediately display it to the specified team.
- * Automatically adjusts and then resets the entity's spawnflags.
- *
- * @param {number} team - TF team number
- * @param {string} message - Message to print
- * @noreturn
+ * Display the message to a specific team number
+ * This is done by temporarily changing the entity's spawnflags
+ * @param {number} team Team number (2 for red, 3 for blue)
+ * @param {string} message Optional new message
  */
-function PrintToTeam(team, message) {
+function PrintToTeam(team, message = null) {
+	Assert(typeof team == "integer", "game_text.nut -- PrintToTeam -- team argument is not an integer");
+
 	local players = [];
+	local maxclients = MaxClients();
 
 	for (local i = 1; i <= maxclients; i++) {
 		local player = PlayerInstanceFromIndex(i);
@@ -66,14 +77,17 @@ function PrintToTeam(team, message) {
 		}
 	}
 
-	local spawnflags = NetProps.GetPropInt(self, "m_spawnflags");
-
-	EntFireByHandle(self, "AddOutput", format("spawnflags %d", ~1 & spawnflags), 0.0, activator, caller);
-	EntFireByHandle(self, "AddOutput", format("message %s", message), 0.0, activator, caller);
-
-	foreach(player in players) {
-		EntFireByHandle(self, "Display", null, 0.0, player, caller);
+	// set message
+	if (message != null && typeof message == "string") {
+		EntFireByHandle(self, "AddOutput", "message " + message, -1, activator, caller);
 	}
 
-	EntFireByHandle(self, "AddOutput", format("spawnflags %d", spawnflags), 0.0, activator, caller);
+	local spawnflags = NetProps.GetPropInt(self, "m_spawnflags");
+	EntFireByHandle(self, "AddOutput", format("spawnflags %d", ~1 & spawnflags), -1, activator, caller);
+
+	foreach(player in players) {
+		EntFireByHandle(self, "Display", null, -1, player, caller);
+	}
+
+	EntFireByHandle(self, "AddOutput", format("spawnflags %d", spawnflags), -1, activator, caller);
 }

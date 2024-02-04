@@ -37,9 +37,11 @@ function DisplayMessage(title, body) {
 }
 
 function HideMessage() {
-	EntFireByHandle(training, "HideTrainingHUD", "", -1, null, null); // message body
-	EntFireByHandle(training, "Kill", "", -1, null, null); // message body
-	InTrainingMode(false);
+	if (InTrainingMode()) {
+		EntFireByHandle(training, "HideTrainingHUD", "", -1, null, null); // message body
+		EntFireByHandle(training, "Kill", "", -1, null, null); // message body
+		InTrainingMode(false);
+	}
 }
 
 function InTrainingMode(set = null) {

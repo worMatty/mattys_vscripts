@@ -1,5 +1,5 @@
 /**
- * Jukebox v0.2.1 by worMatty
+ * Jukebox v0.2.1.1 by worMatty
  *
  * Features:
  * * Simplifies the playing of music track playlists
@@ -34,17 +34,12 @@
  * More functions and arguments:
  * PlayNext() with no arguments
  * 		Play the next track in the currently loaded playlist.
- * 		If there is no playlist loaded, a random track from a playlist will be played.
  * PlayTrack(track, playlist)
  * 		Specify a track by instance, number or `search string`.
- * 		The second argument, 'playlist', is optional. If not specified,
- * 		the currently-loaded playlist will be used.
+ * 		If the second argument, `playlist`, is not specified, the currently-loaded playlist will be used.
  * 		A track's number is the same as its position in the playlist file, beginning with 1.
- * 		There needs to be a playlist loaded to use a track number.
- * 		String search will check track filename, soundname and name, and is case-sensitive.
+ * 		The string search will check track filename, soundname and name, and is case-sensitive.
  * 		If not found in loaded playlist, or no playlist is loaded, it will check all playlists.
- * PlaySomething()
- * 		Pick a random track from a playlist and play it. There is no repeat protection.
  * FadeOut(duration)
  * 		Fade the currently playing track out over the specified number of seconds. Takes a float.
  * Please see the ::jukebox table functions below for full details.
@@ -52,6 +47,13 @@
 
 /*
 Changes:
+0.2.1.1
+Updated documentation to remove reference to deleted functionality, where calling PlayNext()
+with no playlist loaded would pick a random track.
+Removed PlaySomething() from documentation.
+Documentation cleanup.
+Removed line print to console when loading a playlist.
+
 0.2.1
 Better documentation
 Removed PlaySomething() and the failsafe which played *any* track when you tried to PlayNext() with
@@ -98,7 +100,7 @@ function OnPostSpawn() {
 
 // Global stuff - run once
 // --------------------------------------------------------------------------------
-if (("jukebox") in getroottable()) {
+if ("jukebox" in getroottable()) {
 	return;
 	// tip: Type this in server console to fully reset jukebox for testing:
 	// script delete jukebox
@@ -127,7 +129,6 @@ if (("jukebox") in getroottable()) {
 		// specified a playlist
 		if (_playlist != null) {
 			if (!LoadPlaylist(_playlist)) {
-				error("Jukebox -- PlayNext -- Specified playlist not recognised\n");
 				return null;
 			}
 		}
@@ -162,7 +163,7 @@ if (("jukebox") in getroottable()) {
 		// load playlist if specified
 		if (_playlist != null) {
 			if (!LoadPlaylist(_playlist)) {
-				error("Jukebox -- PlayTrack -- Playlist '" + _playlist + "' not found\n");
+				error("Jukebox -- LoadPlaylist -- Playlist '" + _playlist + "' not found\n");
 				return null;
 			}
 		}
@@ -232,9 +233,9 @@ if (("jukebox") in getroottable()) {
 	 */
 	function Stop() {
 		if (sound_ent != null && sound_ent.IsValid()) {
-			EntFireByHandle(sound_ent, "StopSound", null, -1, null, null);
 			AddThinkToEnt(sound_ent, null);
-			sound_ent.Kill();
+			EntFireByHandle(sound_ent, "StopSound", null, -1, null, null);
+			EntFireByHandle(sound_ent, "Kill", null, -1, null, null);
 		}
 
 		sound_ent = null;
@@ -265,7 +266,6 @@ if (("jukebox") in getroottable()) {
 	function LoadPlaylist(name) {
 		if (name in playlists) {
 			playlist = playlists[name];
-			printl("Jukebox -- LoadPlaylist -- Loaded playlist '" + name + "'");
 			return true;
 		} else {
 			error("Jukebox -- LoadPlaylist -- Playlist not found: " + name + "\n");

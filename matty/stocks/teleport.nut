@@ -1,23 +1,37 @@
 /**
- * Matty's Universal Teleporter v0.2
+ * Matty's Universal Teleporter v0.2.1
  * Designed to be included by matty/stocks/globals.nut
  *
  * Teleport any entity or array of entities to one or more destinations.
  * Optionally arrange in a grid around a single destination (on by default).
  *
  * Inputs accept an entity instance, array of entities, targetname or classname.
- * Also accepts an integer and returns an array with players belonging to that team.
+ * All instances of the supplied targetname or classname are found.
+ * Also accepts the integer value of a team, e.g. 2 for red.
  *
  * Teleport players conveniently without needing to make map-wide triggers.
- * Optionally respawns any dead player passed into the function (on by default).
+ * Optionally respawns any dead player passed into the function (off by default).
  */
 
 /**
- * Example usage:
+ * Usage:
  *
- * TeleportStuff(Constants.ETFTeam.TF_TEAM_RED, `tele_dest1`)	// teleport red team to a single entity
- * TeleportStuff(`named_entity`, `tele_dest2`)					// teleport named entity/entities to named entity/entities
- * TeleportStuff(array_of_targets, array_of_destinations)		// teleport an array of targets to an array of destinations
+ * TeleportStuff(source entity or entities, destination entity or entities)
+ * Both values can be a `targetname`, `classname`, instance, array or team number.
+ * All instances of targetnames and classnames are used.
+ *
+ * 		TeleportStuff(TF_TEAM_RED, `multiple_destinations`)
+ * 		TeleportStuff(3, `single_destination`)
+ * 		TeleportStuff(`named_entities`, array_of_entities)
+ *
+ * Optional arguments 3 and 4 and their default values
+ * 		TeleportStuff(source, destination, respawn = false, grid = true)
+ */
+
+ /*
+ Changlog
+ v0.2.1
+ Angular velocity is nullified on teleport
  */
 
 /**
@@ -105,8 +119,7 @@
 		local angles = destination.GetAbsAngles();
 
 		// teleport multiple targets into grid formation around destination
-		if (targets.len() > 1 && grid == true)
-		{
+		if (targets.len() > 1 && grid == true) {
 			local rows = ceil(sqrt(targets.len())).tointeger();
 			local offset = ((rows * option_grid_spacing) / 2) - (option_grid_spacing / 2);
 			origin = Vector(origin.x - offset, origin.y + offset, origin.z);
@@ -124,15 +137,14 @@
 							continue;
 						}
 					}
-					target.Teleport(true, new_origin, true, angles, false, Vector());
+					target.Teleport(true, new_origin, true, angles, true, Vector());
 					teleported++;
 				}
 			}
 		}
 
 		// teleport all targets to the same point
-		else
-		{
+		else {
 			foreach(target in targets) {
 				if (target instanceof CTFPlayer && !target.IsAlive()) {
 					if (respawn) {
@@ -141,15 +153,14 @@
 						continue;
 					}
 				}
-				target.Teleport(true, origin, true, angles, false, Vector());
+				target.Teleport(true, origin, true, angles, true, Vector());
 				teleported++;
 			}
 		}
 	}
 
 	// there are multiple destinations
-	else
-	{
+	else {
 		// randomise destination array if fewer targets than destinations
 		if (targets.len() < destinations.len() && option_shuffle_destinations) {
 			destinations = RandomiseArray(destinations);
@@ -168,7 +179,7 @@
 					continue;
 				}
 			}
-			target.Teleport(true, destinations[index].GetOrigin(), true, destinations[index].GetAbsAngles(), false, Vector());
+			target.Teleport(true, destinations[index].GetOrigin(), true, destinations[index].EyeAngles(), true, Vector());
 			teleported++;
 		}
 	}

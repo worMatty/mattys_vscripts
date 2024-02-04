@@ -1,6 +1,6 @@
 /**
  * Matty's Deathrun Health Scaling
- * Version 1
+ * Version 1.1 - modified to use stocks2
  *
  * Scales the health of any blue players up to an amount appropriate for the number of live reds.
  *
@@ -32,20 +32,17 @@
  */
 
 // includes
-IncludeScript("matty/stocks.nut");
+IncludeScript("matty/stocks2.nut");
 
 // options
 local option_announce = true; // announce scaled health values to chat
-
-// constants
-damage_backstab <- Constants.ETFDmgCustom.TF_DMG_CUSTOM_BACKSTAB;
 
 // Functions
 // --------------------------------------------------------------------------------
 
 function ScaleBlueHealth() {
-	local number_live_reds = GetTeamPlayers(TF_TEAM_RED, true).len();
-	local live_blues = GetTeamPlayers(TF_TEAM_BLUE, true);
+	local number_live_reds = Players().Team(TF_TEAM_RED).Alive().Array().len();
+	local live_blues = Players().Team(TF_TEAM_BLUE).Alive().Array();
 	local number_live_blues = live_blues.len();
 
 	if (number_live_blues >= number_live_reds || !number_live_blues) {
@@ -63,8 +60,8 @@ function ScaleBlueHealth() {
 		player.AddCustomAttribute("health from packs decreased", GetTFClassHealth(player.GetPlayerClass()) / health, -1);
 
 		if (option_announce) {
-			local message = format("%s now has \x05%d \x01health", player.ColoredName(), health.tointeger());
-			ClientPrint(null, Constants.EHudNotify.HUD_PRINTTALK, message);
+			local message = format("%s now has \x05%d \x01health", player.CName(), health.tointeger());
+			ChatMsg(null, message);
 		}
 	}
 }
@@ -78,7 +75,7 @@ CleanGameEventCallbacks();
 function OnScriptHook_OnTakeDamage(params) {
 	if (params.const_entity.IsPlayer() &&
 		params.const_entity.GetTeam() == TF_TEAM_BLUE &&
-		params.damage_custom == damage_backstab) {
+		params.damage_custom == TF_DMG_CUSTOM_BACKSTAB) {
 		params.damage = 100; // backstabs always crit, which multiplies this to 300
 	}
 }
