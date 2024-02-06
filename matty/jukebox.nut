@@ -1,5 +1,5 @@
 /**
- * Jukebox v0.2.1.1 by worMatty
+ * Jukebox v0.2.2 by worMatty
  *
  * Features:
  * * Simplifies the playing of music track playlists
@@ -43,10 +43,23 @@
  * FadeOut(duration)
  * 		Fade the currently playing track out over the specified number of seconds. Takes a float.
  * Please see the ::jukebox table functions below for full details.
+ *
+ * Packing your music:
+ * CompilePal will not find your music so you need to create a list file.
+ * Load your map and in the console type:
+ * 		script jukebox.CreatePacklist("C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2/tf")
+ * If you installed Team Fortress 2 somewhere else, then use that path. You should use forward slashes (/).
+ * This will create a packlist you can use with CompilePal, in tf/scriptdata/jukebox.
+ * If you store your assets in a folder in tf/custom then you must use that path:
+ * 		script jukebox.CreatePacklist("C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2/tf/custom/my_assets")
  */
 
 /*
 Changes:
+0.2.2
+Created a new function to assist with making a list of your music files so you can pack them more
+easily using CompilePal or BSPZIP. See the notes above for how to use jukebox.CreatePacklist().
+
 0.2.1.1
 Updated documentation to remove reference to deleted functionality, where calling PlayNext()
 with no playlist loaded would pick a random track.
@@ -78,7 +91,7 @@ Playlist structure has changed. Tracks now live in an array, and there is a shuf
 
 playlists <- {};
 
-function OnPostSpawn() {
+function Precache() {
 	// load playlists from scope if they do not exist
 	foreach(key, value in playlists) {
 		if (!(key in jukebox.playlists)) {
@@ -86,9 +99,9 @@ function OnPostSpawn() {
 
 			if (playlist.tracks.len()) {
 				jukebox.playlists[key] <- playlist;
-				printl("Jukebox -- Added playlist '" + key + "'");
+				printl(__FILE__ + " -- Added playlist '" + key + "'");
 			} else {
-				error("Jukebox -- Playlist contains no tracks: '" + key + "'\n");
+				error(__FILE__ + " -- Playlist contains no tracks: '" + key + "'\n");
 			}
 		}
 	}
@@ -140,7 +153,7 @@ if ("jukebox" in getroottable()) {
 			return track;
 		}
 
-		error("Jukebox -- PlayNext -- No playlist specified or loaded\n");
+		error(__FILE__ + " -- PlayNext -- No playlist specified or loaded\n");
 		return null;
 	}
 
@@ -163,7 +176,7 @@ if ("jukebox" in getroottable()) {
 		// load playlist if specified
 		if (_playlist != null) {
 			if (!LoadPlaylist(_playlist)) {
-				error("Jukebox -- LoadPlaylist -- Playlist '" + _playlist + "' not found\n");
+				error(__FILE__ + " -- LoadPlaylist -- Playlist '" + _playlist + "' not found\n");
 				return null;
 			}
 		}
@@ -173,7 +186,7 @@ if ("jukebox" in getroottable()) {
 
 			// no playlist loaded
 			if (playlist == null) {
-				error("Jukebox -- PlayTrack -- Can't play track number '" + track + "' as no playlist is loaded\n");
+				error(__FILE__ + " -- PlayTrack -- Can't play track number '" + track + "' as no playlist is loaded\n");
 				return null;
 			}
 
@@ -185,7 +198,7 @@ if ("jukebox" in getroottable()) {
 			}
 			// track number falls outside range
 			else {
-				error("Jukebox -- PlayTrack -- Track number '" + track + "' falls outside tracklist range\n");
+				error(__FILE__ + " -- PlayTrack -- Track number '" + track + "' falls outside tracklist range\n");
 				return null;
 			}
 		}
@@ -221,7 +234,7 @@ if ("jukebox" in getroottable()) {
 			if (result != null) {
 				Play(result);
 			} else {
-				error("Jukebox -- PlayTrack -- Could not find track named '" + track + "'\n");
+				error(__FILE__ + " -- PlayTrack -- Could not find track named '" + track + "'\n");
 			}
 
 			return result;
@@ -268,7 +281,7 @@ if ("jukebox" in getroottable()) {
 			playlist = playlists[name];
 			return true;
 		} else {
-			error("Jukebox -- LoadPlaylist -- Playlist not found: " + name + "\n");
+			error(__FILE__ + " -- LoadPlaylist -- Playlist not found: " + name + "\n");
 			return false;
 		}
 	}
@@ -341,6 +354,43 @@ if ("jukebox" in getroottable()) {
 		playlist = null;
 		playing_track = null;
 		sound_ent = null;
+	}
+
+	/**
+	 * Create a packlist for use with CompilePal to pack all your music
+	 * Stores the file in tf/scriptdata/jukebox/mapname_packlist.txt
+	 * Add it to the 'PACK' step using the 'Include File List' parameter
+	 *
+	 * gamepath should look similar to this:
+	 * C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2/tf/
+	 *
+	 * If using the custom dir, state that instead. Only one dir can be stated
+	 * C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2/tf/custom/my_assets
+	 *
+	 * @param {string} gamepath Full path to your root asset directory. Default is C:/...
+	 */
+	CreatePacklist = function(gamepath = "C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2/tf/") {
+		// add trailing slash if it doesn't exist
+		if (gamepath[gamepath.len() - 1] != '/') {
+			gamepath = gamepath + "/";
+		}
+
+		local filepath = format("jukebox/%s_packlist.txt", GetMapName());
+		local buffer = "";
+
+		foreach(playlist in playlists) {
+			foreach(track in playlist.tracks) {
+				if (track.file != null) {
+					buffer += "sound/" + track.file + "\n";
+					buffer += gamepath + "sound/" + track.file + "\n";
+				}
+			}
+		}
+
+		StringToFile(filepath, buffer);
+		printl(__FILE__ + " -- Packlist created at " + filepath);
+		print(buffer);
+		printl(__FILE__ + " -- Add this to the CompilePal 'PACK' step by adding the 'Include File List' parameter");
 	}
 };
 
@@ -419,7 +469,7 @@ if ("jukebox" in getroottable()) {
 
 		// return if no tracks or list not an array
 		if (!("tracks" in table) || typeof table.tracks != "array") {
-			error("Jukebox -- Playlist -- No track list found in playlist\n");
+			error(__FILE__ + " -- Playlist -- No track list found in playlist\n");
 			return;
 		}
 
