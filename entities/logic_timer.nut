@@ -13,15 +13,15 @@ Think_CheckForReds <-  function() {
 
 	if (players_nearby) {
 		if (!enabled) {
-			// printl(self + " players detected - enabling");
+			// printl(__FILE__ + " players detected - enabling");
 			EntFireByHandle(self, "Enable", "", -1, null, null);
 		}
 	} else if (enabled) {
-		// printl(self + " no players detected - disabling");
+		// printl(__FILE__ + " no players detected - disabling");
 		EntFireByHandle(self, "Disable", "", -1, null, null);
 	}
 
-	// printl(self + " Think_CheckForReds -- timer enabled is " + enabled);
+	// printl(__FILE__ + " Think_CheckForReds -- timer enabled is " + enabled);
 
 	return 1;
 };

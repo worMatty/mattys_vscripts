@@ -54,7 +54,7 @@ Assert((bar != null && bar.IsValid()), self + " monster_resource not found. Can'
  */
 function StartBlueBossBar() {
 	if (!IsBarValid()) {
-		printl(self + " Unable to start boss bar as the monster_resource is not present! Disabling");
+		printl(__FILE__ + " Unable to start boss bar as the monster_resource is not present! Disabling");
 		DisableBar();
 		return;
 	}
@@ -70,13 +70,13 @@ function StartBlueBossBar() {
  */
 function StartBossBar() {
 	if (!IsBarValid()) {
-		printl(self + " Unable to start boss bar as the monster_resource is not present! Disabling");
+		printl(__FILE__ + " Unable to start boss bar as the monster_resource is not present! Disabling");
 		DisableBar();
 		return;
 	}
 
 	if (bar_ents.len() == 0) {
-		printl(self + " Entity array is empty. Add some entities to monitor the health of then try again")
+		printl(__FILE__ + " Entity array is empty. Add some entities to monitor the health of then try again")
 		return;
 	}
 
@@ -96,17 +96,17 @@ function AddEntToBar(ent) {
 		while (i = Entities.FindByName(i, ent)) {
 			if (NetProps.HasProp(i, "m_iHealth")) {
 				bar_ents.push(i);
-				if (debug) printl(self + " pushed " + i + " to bar ents array");
+				if (debug) printl(__FILE__ + " pushed " + i + " to bar ents array");
 			} else {
-				printl(self + " entity " + i + " doesn't have a health property. Not adding");
+				printl(__FILE__ + " entity " + i + " doesn't have a health property. Not adding");
 			}
 		}
 	} else if (typeof ent == "instance" && ent.IsValid()) {
 		if (NetProps.HasProp(ent, "m_iHealth")) {
 			bar_ents.push(ent);
-			if (debug) printl(self + " pushed " + ent + " to bar ents array");
+			if (debug) printl(__FILE__ + " pushed " + ent + " to bar ents array");
 		} else {
-			printl(self + " entity " + ent + " doesn't have a health property. Not adding");
+			printl(__FILE__ + " entity " + ent + " doesn't have a health property. Not adding");
 		}
 	}
 }
@@ -122,14 +122,14 @@ function RemoveEntFromBar(ent) {
 		for (local i = bar_ents.len() - 1; i >= 0; i--) {
 			if (!bar_ents[i].IsValid() || bar_ents[i].GetName() == ent) {
 				bar_ents.remove(i);
-				if (debug) printl(self + " removed " + i + " from bar ents array");
+				if (debug) printl(__FILE__ + " removed " + i + " from bar ents array");
 			}
 		}
 	} else if (typeof ent == "instance" && ent.IsValid()) {
 		local index = bar_ents.find(ent);
 		if (index != null) {
 			bar_ents.remove(index);
-			if (debug) printl(self + " removed " + ent + " from bar ents array");
+			if (debug) printl(__FILE__ + " removed " + ent + " from bar ents array");
 		}
 	}
 }
@@ -142,7 +142,7 @@ function EnableBar() {
 	if (!enabled) {
 		enabled = true;
 		AddThinkToEnt(self, "Think"); // add the think
-		if (debug) printl(self + " enabled bar");
+		if (debug) printl(__FILE__ + " enabled bar");
 	}
 }
 
@@ -155,7 +155,7 @@ function DisableBar() {
 		AddThinkToEnt(self, ""); // remove the think
 		SetBarValue(0);
 		enabled = false; // must be done last because SetBarValue checks if the bar is enabled
-		if (debug) printl(self + " disabled bar");
+		if (debug) printl(__FILE__ + " disabled bar");
 	}
 }
 
@@ -274,7 +274,7 @@ function SetBarValue(val, max = 255) {
 	}
 
 	if (enabled && GetBarValue() != prev_bar_val) { // todo: do I need to check if enabled?
-		printl(self + " Outside interference with monster_resource bar value detected. Disabling");
+		printl(__FILE__ + " Outside interference with monster_resource bar value detected. Disabling");
 		DisableBar();
 		return;
 	}
@@ -283,7 +283,7 @@ function SetBarValue(val, max = 255) {
 	val = Clamp(val, 0, 255);
 	NetProps.SetPropInt(bar, "m_iBossHealthPercentageByte", val);
 	prev_bar_val = val;
-	if (debug) printl(self + " bar value set to " + val);
+	if (debug) printl(__FILE__ + " bar value set to " + val);
 }
 
 /**

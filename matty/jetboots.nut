@@ -46,7 +46,7 @@ function EnableJetBoots(fuel = default_max_fuel, max_fuel = default_max_fuel) {
 	local player = activator;
 
 	if (player == null || !player.IsValid() || !(activator instanceof CTFPlayer)) {
-		return error("Jetboots EnableJetBoots() -- Activator is invalid or not a player\n");
+		return error(__FILE__ + " -- EnableJetBoots() -- Activator is invalid or not a player\n");
 	}
 
 	users.append({
@@ -73,7 +73,7 @@ function DisableJetBoots() {
 	local player = activator;
 
 	if (player == null || !player.IsValid() || !(activator instanceof CTFPlayer)) {
-		return error("Jetboots DisableJetBoots() -- Activator is invalid or not a player\n");
+		return error(__FILE__ + " -- DisableJetBoots() -- Activator is invalid or not a player\n");
 	}
 
 	// remove player from users array
@@ -97,7 +97,7 @@ function DisableJetBoots() {
  */
 function ToggleJetboots() {
 	if (activator == null || !activator.IsValid() || !(activator instanceof CTFPlayer)) {
-		return error("Jetboots ToggleJetboots() -- Activator is invalid or not a player\n");
+		return error(__FILE__ + " -- ToggleJetboots() -- Activator is invalid or not a player\n");
 	}
 
 	// is user in array?

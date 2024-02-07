@@ -24,7 +24,7 @@ Teleport <-  function(destination, stop_moving = false) {
 	local ent = Entities.FindByName(null, destination);
 
 	if (ent == null) {
-		printl(self + " -- destination entity '" + destination + "' not found");
+		printl(__FILE__ + " -- destination entity '" + destination + "' not found");
 		return;
 	}
 

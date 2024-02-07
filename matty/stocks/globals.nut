@@ -227,17 +227,17 @@ delete constants;
 
 				if (sound.sound_name == params.sound_name && sound.entity == params.entity) {
 					soundlist.remove(i);
-					// printl(self + " looping sound removed: " + params.sound_name);
+					// printl(__FILE__ + " looping sound removed: " + params.sound_name);
 				}
 			}
 		} else {
-			// printl(self + " looping sound found: " + params.sound_name); //
+			// printl(__FILE__ + " looping sound found: " + params.sound_name); //
 			soundlist.append(params);
 		}
 	}
 
 	// DumpObject(params);
-	// printl(self + " is emitting " + params.sound_name + " from " + params.entity);
+	// printl(__FILE__ + " is emitting " + params.sound_name + " from " + params.entity);
 
 	EmitSoundEx(params);
 };

@@ -183,19 +183,19 @@ Holiday <- class {
 		// error checking
 		if (start_date == null || end_date == null) {
 			if (tfholiday == null) {
-				error("Holidays -- Holiday '" + name + "' has no start or end date but does not specify a tfholiday\n");
+				error(__FILE__ + " -- Holiday '" + name + "' has no start or end date but does not specify a tfholiday\n");
 				invalid = true;
 			}
 
 			if (ignore_forced == true && options.debug_mode) {
-				printl("Holidays -- Holiday '" + name + "' has no start or end date but has ignore_forced set to true\nWhen the server is forcing it, this holiday will not trigger");
+				printl(__FILE__ + " -- Holiday '" + name + "' has no start or end date but has ignore_forced set to true\nWhen the server is forcing it, this holiday will not trigger");
 			}
 		}
 
 		// start date checking
 		if (start_date != null) {
 			if (end_date == null) {
-				error("Holidays -- Holiday '" + name + "' has a start date but no end date\n");
+				error(__FILE__ + " -- Holiday '" + name + "' has a start date but no end date\n");
 				invalid = true;
 			}
 
@@ -213,7 +213,7 @@ Holiday <- class {
 		// end date checking
 		if (end_date != null) {
 			if (start_date == null) {
-				error("Holidays -- Holiday '" + name + "' has an end date but no start date\n");
+				error(__FILE__ + " -- Holiday '" + name + "' has an end date but no start date\n");
 				invalid = true;
 			}
 
@@ -230,7 +230,7 @@ Holiday <- class {
 
 		// check if holiday is forced on in config
 		if (forced_on) {
-			printl("Holidays -- Holiday '" + name + "' has been forced on in config!");
+			printl(__FILE__ + " -- Holiday '" + name + "' has been forced on in config!");
 		}
 	}
 
@@ -333,7 +333,7 @@ Holiday <- class {
 	 */
 	function TriggerRelay() {
 		if (options.debug_mode) {
-			printl("Holidays -- Debug mode -- Triggering relay for holiday '" + name + "'");
+			printl(__FILE__ + " -- Debug mode -- Triggering relay for holiday '" + name + "'");
 		}
 		EntFire(format("relay_holiday_%s", name), "Trigger", null, -1);
 	}
@@ -354,7 +354,7 @@ foreach(key, value in holidays) {
 
 	// invalid holidays may not work properly
 	if (holiday.invalid == true) {
-		error("Holidays -- Holiday with incomplete configuration '" + key + "'\n");
+		error(__FILE__ + " -- Holiday with incomplete configuration '" + key + "'\n");
 		DumpObject(value);
 	}
 }
@@ -366,7 +366,7 @@ delete holidays;
 function CheckHolidays() {
 	foreach(key, holiday in holidays) {
 		if (holiday.IsActive()) {
-			printl("Holidays -- Debug mode -- Holiday '" + key + "' is active");
+			printl(__FILE__ + " -- Debug mode -- Holiday '" + key + "' is active");
 		}
 	}
 }
@@ -376,7 +376,7 @@ function CheckHolidays() {
  */
 function TriggerHolidays() {
 	if (options.debug_mode) {
-		printl("Holidays -- Debug mode -- Triggering holidays");
+		printl(__FILE__ + " -- Debug mode -- Triggering holidays");
 	}
 
 	foreach(holiday in holidays) {
@@ -391,7 +391,7 @@ function TriggerHolidays() {
  * Only works id debug mode is enabled
  */
 if (options.debug_mode) {
-	printl("Holidays -- Debug mode -- Checking holidays");
+	printl(__FILE__ + " -- Debug mode -- Checking holidays");
 	CheckHolidays();
 }
 

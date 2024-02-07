@@ -46,7 +46,7 @@ CleanGameEventCallbacks();
 function OnGameEvent_scorestats_accumulated_update(params) {
 	local soundlist = ::matty.sounds;
 
-	printl("Stopping " + soundlist.len() + " sounds");
+	printl(__FILE__ + " -- Stopping " + soundlist.len() + " sounds");
 
 	foreach(sound in soundlist) {
 		sound.flags <- SND_STOP;

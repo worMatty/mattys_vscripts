@@ -86,31 +86,31 @@ foreach(key, val in phrases) {
 
 // function OnPostSpawn() {
 // 	local message = NetProps.GetPropString(self, "m_szText");
-// 	printl(self + " message: " + message);
+// 	printl(__FILE__ + " message: " + message);
 // }
 
 // I was investigating if it was possible to alter the alignment of the text
 // function PostSetMessage() {
 // netprops
-// printl(self + "m_vecMinsPreScaled = " + NetProps.GetPropVector(self, "m_vecMinsPreScaled"));
-// printl(self + "m_vecMaxsPreScaled = " + NetProps.GetPropVector(self, "m_vecMaxsPreScaled"));
-// printl(self + "m_vecMins = " + NetProps.GetPropVector(self, "m_vecMins"));
-// printl(self + "m_vecMaxs = " + NetProps.GetPropVector(self, "m_vecMaxs"));
-// printl(self + "m_vecSpecifiedSurroundingMinsPreScaled = " + NetProps.GetPropVector(self, "m_vecSpecifiedSurroundingMinsPreScaled"));
-// printl(self + "m_vecSpecifiedSurroundingMaxsPreScaled = " + NetProps.GetPropVector(self, "m_vecSpecifiedSurroundingMaxsPreScaled"));
-// printl(self + "m_vecSpecifiedSurroundingMins = " + NetProps.GetPropVector(self, "m_vecSpecifiedSurroundingMins"));
-// printl(self + "m_vecSpecifiedSurroundingMaxs = " + NetProps.GetPropVector(self, "m_vecSpecifiedSurroundingMaxs"));
+// printl(__FILE__ + "m_vecMinsPreScaled = " + NetProps.GetPropVector(self, "m_vecMinsPreScaled"));
+// printl(__FILE__ + "m_vecMaxsPreScaled = " + NetProps.GetPropVector(self, "m_vecMaxsPreScaled"));
+// printl(__FILE__ + "m_vecMins = " + NetProps.GetPropVector(self, "m_vecMins"));
+// printl(__FILE__ + "m_vecMaxs = " + NetProps.GetPropVector(self, "m_vecMaxs"));
+// printl(__FILE__ + "m_vecSpecifiedSurroundingMinsPreScaled = " + NetProps.GetPropVector(self, "m_vecSpecifiedSurroundingMinsPreScaled"));
+// printl(__FILE__ + "m_vecSpecifiedSurroundingMaxsPreScaled = " + NetProps.GetPropVector(self, "m_vecSpecifiedSurroundingMaxsPreScaled"));
+// printl(__FILE__ + "m_vecSpecifiedSurroundingMins = " + NetProps.GetPropVector(self, "m_vecSpecifiedSurroundingMins"));
+// printl(__FILE__ + "m_vecSpecifiedSurroundingMaxs = " + NetProps.GetPropVector(self, "m_vecSpecifiedSurroundingMaxs"));
 
-// printl(self + "m_nSurroundType = " + NetProps.GetPropInt(self, "m_nSurroundType"));
+// printl(__FILE__ + "m_nSurroundType = " + NetProps.GetPropInt(self, "m_nSurroundType"));
 
 // // datamaps
-// printl(self + "m_rgflCoordinateFrame = " + NetProps.GetPropInt(self, "m_rgflCoordinateFrame"));
+// printl(__FILE__ + "m_rgflCoordinateFrame = " + NetProps.GetPropInt(self, "m_rgflCoordinateFrame"));
 
 // none of the above contained useful data
 
 // local netprops = {};
 // NetProps.GetTable(self, 0, netprops);
-// printl(self + " -- Dumping netprops --");
+// printl(__FILE__ + " -- Dumping netprops --");
 // DumpObject(netprops);
 
 // local datamaps = {};
@@ -118,7 +118,7 @@ foreach(key, val in phrases) {
 
 // local my_lovely_table = {};
 // NetProps.GetTable(self, 1, my_lovely_table);
-// printl(self + " -- Dumping datamaps --");
+// printl(__FILE__ + " -- Dumping datamaps --");
 // printl(datamaps);
 // DumpObject(datamaps);
 // }

@@ -1,5 +1,5 @@
 /**
- * Matty's Universal Teleporter v0.2.1
+ * Matty's Universal Teleporter v0.2.1.1
  * Designed to be included by matty/stocks/globals.nut
  *
  * Teleport any entity or array of entities to one or more destinations.
@@ -28,11 +28,15 @@
  * 		TeleportStuff(source, destination, respawn = false, grid = true)
  */
 
- /*
- Changlog
- v0.2.1
- Angular velocity is nullified on teleport
- */
+/*
+Changlog
+v0.2.1.1
+Target to teleport was being checked if it was an instance but presumed it was an entity.
+As a result, passing Players instances to it caused an error when it checked IsValid().
+Now, instances are checked if they are an instance of CBaseEntity or Players.
+v0.2.1
+Velocity is nullified on teleport
+*/
 
 /**
  * Teleport one or more entities to one or more destination entities.
@@ -61,9 +65,16 @@
 		if (typeof input == "array" && input.len() > 0) {
 			output = input;
 		}
-		// instance entity
-		else if (typeof input == "instance" && input.IsValid()) {
-			output.push(input);
+		// instance
+		else if (typeof input == "instance") {
+			// entity
+			if (input instanceof CBaseEntity && input.IsValid()) {
+				output.push(input);
+			}
+			// Players instance
+			else if (input instanceof Players) {
+				output = input.Array();
+			}
 		}
 		// string targetname & classname
 		else if (typeof input == "string") {
@@ -81,10 +92,6 @@
 		else if (typeof input == "integer") {
 			// output = GetTeamPlayers(input);
 			output = Players().Team(input).Array();
-		}
-		// Players instance
-		else if (input instanceof Players) {
-			output = input.Array();
 		}
 
 		return output;

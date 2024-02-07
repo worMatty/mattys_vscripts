@@ -38,14 +38,14 @@ function OnPostSpawn()
     {
         if (!EntityGroup[i].IsValid())
         {
-            printl(self + format(" EntityGroup[%d] is not a valid entity: ", i) + EntityGroup[i]);
+            printl(__FILE__ + format(" EntityGroup[%d] is not a valid entity: ", i) + EntityGroup[i]);
             invalid_entities_found = true;
         }
     }
 
     if (invalid_entities_found)
     {
-        printl(self + " The game won't work because one of the question and answer entities is not valid");
+        printl(__FILE__ + " The game won't work because one of the question and answer entities is not valid");
         return; // fail here
     }
 
@@ -62,7 +62,7 @@ function OnPostSpawn()
 
     // for (local i = 0; i < len; i++)
     // {
-    //     printl(self + format(" EntityGroup[%d] == ", i) + EntityGroup[i]);
+    //     printl(__FILE__ + format(" EntityGroup[%d] == ", i) + EntityGroup[i]);
     // }
 }
 
