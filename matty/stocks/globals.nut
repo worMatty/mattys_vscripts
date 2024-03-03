@@ -242,6 +242,210 @@ delete constants;
 	EmitSoundEx(params);
 };
 
+/*
+EmitSoundEx common uses
+Playing a UI sound to a client
+Emitting a sound in the world from somewhere with a set radius
+Playing a looping ambient sound
+	Either store sound in a table or make an ambient_generic
+	Use RECIPIENT_FILTER_PAS
+
+Keyvalues
+sound
+	Sorts between raw and soundscript
+volume
+	Integer 100 percent or float 1.0 (or integer 1)
+radius
+	Integer
+channel
+	integer or string
+loop
+	If key provided, always true
+	SPlayAmbient(sound, table)
+playfrom
+	CBaseEntity Instance or targetname or origin
+playto
+	Play to a client or array of clients or Players()
+	SPlayToClient(sound, client, table)
+*/
+
+
+/**
+ * Simple sound playing designed for one-shot sounds
+ * Precaches the sound before playing
+ * Uses the static channel, and a sound_level of 8- by default
+ * @param {string} sound Sound file or game sound name
+ * @param {table} params Parameters to pass to EmitSoundEx. Custom parameter 'radius' converts Hammer units into sound_level
+ */
+::PlaySound <-  function(sound, params = {}) {
+	local extension = (sound.len() > 4) ? sound.slice(-4).tolower() : null;
+	printl(__FILE__ + "-- PlaySound caller: " + caller + " activator: " + activator + " self: " + self);
+
+	// precache
+	if (extension == ".wav" || extension == ".mp3") {
+		PrecacheSound(sound);
+	} else {
+		if (!PrecacheScriptSound(sound)) {
+			printl(__FILE__ + " -- PlaySound -- soundscript sound not found: " + params.sound_name);
+			return;
+		}
+	}
+
+	// parameters
+	local defaults = {
+		channel = 6
+		sound_level = 80
+		entity = self
+	}
+
+	foreach(key, value in defaults) {
+		if (!(key in params)) {
+			params[key] <- value;
+		}
+	}
+
+	// radius
+	if ("radius" in params) {
+		params.sound_level = SoundRadiustoDecibels(params.radius);
+	}
+
+	// source
+	if ("source" in params) {
+		params.entity = source;
+	}
+
+	// entity
+	if (params.entity.entindex() == 0) {
+		if (!("origin" in params)) {
+			params.origin <- params.entity.GetOrigin();
+		}
+	}
+
+	EmitSoundEx(params);
+};
+
+/**
+ * Play a sound to a player
+ * Useful for UI sounds
+ * @param {string} sound Sound file or game sound name
+ * @param {table} params Parameters to pass to EmitSoundEx
+ */
+::PlayToClient <-  function(client, sound, table = {}) {
+	table.entity <- client;
+	table.channel <- 0;
+	table.sound_level <- 0;
+	table.filter <- 4;
+	SPlay(sound, table);
+};
+
+
+// work in progress. not functional
+/* function SPlay(sound, table = {}) {
+
+	// precache
+	local sound_name_lowercase = params.sound_name.tolower();
+	if (sound_name_lowercase.find(".wav") || sound_name_lowercase.find(".mp3")) {
+		PrecacheSound(params.sound_name);
+	} else {
+		if (!PrecacheScriptSound(params.sound_name)) {
+			printl(__FILE__ + " -- SPlay -- soundscript sound not found: " + params.sound_name);
+			return;
+		}
+	}
+
+	local sounds_to_play = [];
+
+	// create table for EmitSoundEx
+	local params = {
+		channel = 6 // chan_static
+		sound_level = 80 //
+	};
+
+	// volume
+	if ("volume" in table) {
+		if (typeof table.volume == "integer") {
+			if (table.volume == 1) {
+				params.volume <- 1.0;
+			} else {
+				params.volume <- table.volume * 0.01;
+			}
+		} else if (typeof table.volume == "float") {
+			params.volume <- table.volume;
+		}
+	}
+
+	// radius
+	if ("radius" in table) {
+		params.sound_level = SoundRadiustoDecibels(table.radius);
+	}
+
+	// channel
+	if ("channel" in table) {
+		local channel = table.channel;
+
+		if (typeof channel == "integer") {
+			params.channel = channel;
+		} else if (typeof channel == "string") {
+			if (channel == "static") {
+				params.channel = 6;
+			} else if (channel == "auto") {
+				params.channel = 0
+			}
+		}
+	}
+
+	//playfrom
+	if ("playfrom" in table) {
+
+		// array of instances to process later
+		local ents = [];
+
+		// entity instance
+		if (typeof table.playfrom == "instance" && table.playfrom instanceof CBaseEntity) {
+			ents.append(table.playfrom);
+		}
+
+		// string
+		else if (typeof table.playfrom == "string") {
+			local targetname = table.playfrom;
+			local ent = null;
+			local ents = [];
+
+			while ((ent = Entities.FindByName(ent, targetname)) != null) {
+				ents.append(ent);
+			}
+		}
+
+		// vector
+		else if (typeof table.playfrom == "vector") {
+			params.origin <- table.playfrom;
+			sounds_to_play.append(params);
+		}
+
+		// process array of ents
+		if (ents.len() > 0) {
+			foreach(ent in ents) {
+
+				// server-side ent or edict
+				if (ent.entindex() == 0) {
+					params.origin <- ent.GetOrigin();
+					delete params.entity;
+				} else {
+					params.entity <- ent;
+					delete params.origin;
+				}
+
+				sounds_to_play.append(params);
+			}
+		}
+	}
+
+	// play all tables in the array
+	foreach(sound in sounds_to_play) {
+		EmitSoundEx(sound);
+	}
+} */
+
 /**
  * Convert sound radius in Hammer units to decibels
  * for use as the soundlevel in sound functions
@@ -892,44 +1096,44 @@ foreach(key, value in this) {
  * @param {array} array Input array
  * @return {array} A new array with the original values in a random order
  */
-::RandomiseArray <- function(array) {
-	local new_array = [];
+::RandomiseArray <-  function(array) {
+		local new_array = [];
 
-	while (array.len() > 0) {
-		local index = RandomInt(0, array.len() - 1);
-		new_array.push(array.remove(index));
+		while (array.len() > 0) {
+			local index = RandomInt(0, array.len() - 1);
+			new_array.push(array.remove(index));
+		}
+
+		return new_array;
 	}
 
-	return new_array;
-}
 
+	// Hooking
+	// --------------------------------------------------------------------------------
 
-// Hooking
-// --------------------------------------------------------------------------------
+	/**
+	 * Iterates the event tables and removes any entries attached to an invalid instance
+	 * Unlike ClearGameEventCallbacks, this does not wipe every event from the tables
+	 */
+	::CleanGameEventCallbacks <-  function() {
+		local Clean = function(event_table) {
+			if (!(event_table in ROOT)) {
+				return;
+			}
 
-/**
- * Iterates the event tables and removes any entries attached to an invalid instance
- * Unlike ClearGameEventCallbacks, this does not wipe every event from the tables
- */
-::CleanGameEventCallbacks <-  function() {
-	local Clean = function(event_table) {
-		if (!(event_table in ROOT)) {
-			return;
-		}
-
-		foreach(event, event_array in ROOT[event_table]) {
-			for (local i = event_array.len() - 1; i >= 0; i--) {
-				if (!event_array[i].self.IsValid()) {
-					event_array.remove(i);
+			foreach(event, event_array in ROOT[event_table]) {
+				for (local i = event_array.len() - 1; i >= 0; i--) {
+					if (!event_array[i].self.IsValid()) {
+						event_array.remove(i);
+					}
 				}
 			}
-		}
-	};
+		};
 
-	Clean("GameEventCallbacks");
-	// clean(ScriptEventCallbacks);
-	Clean("ScriptHookCallbacks");
-};
+		Clean("GameEventCallbacks");
+		// clean(ScriptEventCallbacks);
+		Clean("ScriptHookCallbacks");
+	};
 
 // ROOT
 //     GameEventCallbacks (event table)

@@ -10,6 +10,8 @@ colours <- {
 	locked = "255 158 28" // cannot currently press button - orange
 }
 
+ready_sound <- "weapons/rocket_pack_boosters_ready.wav";
+
 state <- {
 	consumed = false
 	oncooldown = false
@@ -17,6 +19,20 @@ state <- {
 
 self.ConnectOutput("OnPressed", "OnPressed");
 self.ConnectOutput("OnOut", "OnOut");
+
+function Precache() {
+	local extension = (ready_sound.len() > 4) ? ready_sound.slice(-4).tolower() : null;
+
+	// precache
+	if (extension == ".wav" || extension == ".mp3") {
+		PrecacheSound(ready_sound);
+	} else {
+		if (!PrecacheScriptSound(ready_sound)) {
+			printl(__FILE__ + " -- Soundscript sound not found: " + ready_sound);
+			return;
+		}
+	}
+}
 
 function OnPressed() {
 	if (NetProps.GetPropFloat(self, "m_flWait").tointeger() != -1) {
@@ -28,6 +44,13 @@ function OnPressed() {
 
 function OnOut() {
 	Ready();
+	EmitSoundEx({
+		sound_name = ready_sound
+		entity = self // emit from the button
+		sound_level = 150
+		filter = 6 // team only
+		filter_param = 3 // blue
+	})
 }
 
 /**

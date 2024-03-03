@@ -15,35 +15,39 @@ objects <- [
 			model = "models/props_lakeside_event/bomb_temp.mdl"
 			ExplodeDamage = 120
 			ExplodeRadius = 40
-			OnUser1 = "!self,Break,,3.0,1"
+			OnUser1 = "!self,Break,,2.0,1"
 		}
 	},
-	// small_money <- {
-	// 	classname = "item_currencypack_small"
-	// 	keyvalues = {
-	// 		OnPlayerTouch = "!activator,RunScriptCode,self.AddCurrency(5),-1,1"
-	// 		OnPlayerTouch = "!self,Kill,,-1,1"
-	// 		OnUser1 = "!self,Kill,,10.0,1"
-	// 	}
-	// },
-	medium_money <- {
-		classname = "item_currencypack_medium"
+	small_money <- {
+		classname = "item_currencypack_small"
 		keyvalues = {
-			// OnPlayerTouch#1 = "!activator,RunScriptCode,self.AddCurrency(10),-1,1"
-			// OnPlayerTouch#2 = "!self,Kill,,-1,1"
-			"OnPlayerTouch#1" : "!activator,RunScriptCode,self.AddCurrency(10),-1,1"
-			"OnPlayerTouch#2" : "!self,Kill,,-1,1"
+			"OnPlayerTouch#1": "!activator,RunScriptCode,self.AddCurrency(5),-1,1"
+			"OnPlayerTouch#2": "!self,Kill,,-1,1"
 			OnUser1 = "!self,Kill,,10.0,1"
 		}
 	},
-	// big_money <- {
-	// 	classname = "item_currencypack_large"
-	// 	keyvalues = {
-	// 		OnPlayerTouch = "!activator,RunScriptCode,self.AddCurrency(25),-1,1"
-	// 		OnPlayerTouch = "!self,Kill,,-1,1"
-	// 		OnUser1 = "!self,Kill,,10.0,1"
-	// 	}
-	// }
+	medium_money <- {
+		classname = "item_currencypack_medium"
+		keyvalues = {
+			"OnPlayerTouch#1": "!activator,RunScriptCode,self.AddCurrency(10),-1,1"
+			"OnPlayerTouch#2": "!self,Kill,,-1,1"
+			OnUser1 = "!self,Kill,,10.0,1"
+		}
+	},
+	big_money <- {
+		classname = "item_currencypack_large"
+		keyvalues = {
+			"OnPlayerTouch#1": "!activator,RunScriptCode,self.AddCurrency(25),-1,1"
+			"OnPlayerTouch#2": "!self,Kill,,-1,1"
+			OnUser1 = "!self,Kill,,10.0,1"
+		}
+	}
+	small_health <- {
+		classname = "item_healthkit_small"
+		keyvalues = {
+			"OnPlayerTouch#1": "!self,Kill,,-1,1"
+		}
+	},
 ];
 
 function Precache() {
@@ -62,19 +66,28 @@ SpawnSomething <-  function() {
 	local origin = caller.GetOrigin();
 
 	// find ground position under self
-	local trace = {
-		start = origin
-		end = origin + Vector(0, 0, -1000)
-	};
-	TraceLineEx(trace);
+	// local trace = {
+	// 	start = origin
+	// 	end = origin + Vector(0, 0, -1000)
+	// };
+	// TraceLineEx(trace);
 
 	// create object
-	local object = objects[RandomInt(0, objects.len() - 1)];
+	local object;
+
+	if (activator != null && activator instanceof CTFPlayer && activator.GetHealth() < 100) {
+		object = objects[objects.find(small_health)];
+	} else {
+		object = objects[RandomInt(0, objects.len() - 1)];
+	}
+
 	local ent = SpawnEntityFromTable(object.classname, object.keyvalues);
 
 	if (ent == null) {
 		return;
 	}
+
+	ent.SetMoveType(MOVETYPE_FLYGRAVITY, MOVECOLLIDE_FLY_BOUNCE);
 
 	// set velocity and impulse
 	local vel = Vector(RandomFloat(-45, 45), RandomFloat(-45, 45), 250);
@@ -85,7 +98,8 @@ SpawnSomething <-  function() {
 	// ClientPrint(null, 4, "Velocity: " + vel + "\nAngular impulse: " + angular_impulse);
 
 	// teleport and add velocity
-	ent.SetAbsOrigin(trace.pos + Vector(0, 0, ent.GetBoundingMins().z * -1.0));
+	// ent.SetAbsOrigin(trace.pos + Vector(0, 0, ent.GetBoundingMins().z * -1.0));
+	ent.SetAbsOrigin(origin);
 	ent.Teleport(false, Vector(), false, QAngle(), true, vel); // *
 	ent.ApplyLocalAngularVelocityImpulse(angular_impulse);
 

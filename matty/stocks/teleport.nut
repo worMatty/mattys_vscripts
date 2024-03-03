@@ -30,6 +30,8 @@
 
 /*
 Changlog
+v0.2.2
+Created options table parameter and moved 'grid' and 'respawn' parameters into it.
 v0.2.1.1
 Target to teleport was being checked if it was an instance but presumed it was an entity.
 As a result, passing Players instances to it caused an error when it checked IsValid().
@@ -43,14 +45,30 @@ Velocity is nullified on teleport
  * If using a target or classname, it will find all instances.
  * If using a team number, dead players will be filtered out of the final results if respawn == false.
  * Grid arrangement of players only occurs when there is a single destination.
+ *
  * @param {any} targets Team number, entity instance, array of entities, targetname, classname
  * @param {any} destinations Instance or targetname string of destination entity or entities
- * @param {bool} respawn Optionally respawn any dead players before teleporting
+ * @param {table} options Table of optional settings. See below
+ * Options:
+ * @param {bool} respawn Optionally respawn any dead players before teleporting (default: false)
+ * @param {bool} grid Arrange players in grid formation around a single ent if true (default), or all on the ent if false
+ * @param {bool} grid_spacing Distance between the center of each player in the grid (default: 64)
+ * @param {bool} shuffle_destinations If the number of destination ents is greater than the number of targets, shuffle the destinations (default: true)
  * @return {number} Number of entities teleported
  */
-::TeleportStuff <-  function(targets, destinations, respawn = false, grid = true) {
-	local option_grid_spacing = 64.0; // space between entities in grid formation
-	local option_shuffle_destinations = true; // shuffle destinations when they surpass targets
+::TeleportStuff <-  function(targets, destinations, options = {}) {
+	local defaults = {
+		respawn = false
+		grid = true
+		grid_spacing = 64.0 // space between entities in grid formation
+		shuffle_destinations = true // shuffle destinations when they surpass targets
+	}
+
+	foreach(key, value in defaults) {
+		if (!(key in options)) {
+			options[key] <- value;
+		}
+	}
 
 	/**
 	 * Process the input and produce an array of teleport targets or destinations.
@@ -101,7 +119,7 @@ Velocity is nullified on teleport
 	destinations = ProcessInput(destinations);
 
 	// filter dead players when not respawning
-	if (respawn == false) {
+	if (options.respawn == false) {
 		targets = targets.filter(function(index, target) {
 			if (target instanceof CTFPlayer && !target.IsAlive()) {
 				return false;
@@ -126,19 +144,19 @@ Velocity is nullified on teleport
 		local angles = destination.GetAbsAngles();
 
 		// teleport multiple targets into grid formation around destination
-		if (targets.len() > 1 && grid == true) {
+		if (targets.len() > 1 && options.grid == true) {
 			local rows = ceil(sqrt(targets.len())).tointeger();
-			local offset = ((rows * option_grid_spacing) / 2) - (option_grid_spacing / 2);
+			local offset = ((rows * options.grid_spacing) / 2) - (options.grid_spacing / 2);
 			origin = Vector(origin.x - offset, origin.y + offset, origin.z);
 
 			// column
 			for (local i = 0; i < rows && targets.len(); i++) {
 				// row
 				for (local j = 0; j < rows && targets.len(); j++) {
-					local new_origin = Vector(origin.x + (option_grid_spacing * j), origin.y - (option_grid_spacing * i), origin.z);
+					local new_origin = Vector(origin.x + (options.grid_spacing * j), origin.y - (options.grid_spacing * i), origin.z);
 					local target = targets.pop();
 					if (target instanceof CTFPlayer && !target.IsAlive()) {
-						if (respawn) {
+						if (options.respawn) {
 							target.ForceRespawn();
 						} else {
 							continue;
@@ -154,7 +172,7 @@ Velocity is nullified on teleport
 		else {
 			foreach(target in targets) {
 				if (target instanceof CTFPlayer && !target.IsAlive()) {
-					if (respawn) {
+					if (options.respawn) {
 						target.ForceRespawn();
 					} else {
 						continue;
@@ -169,7 +187,7 @@ Velocity is nullified on teleport
 	// there are multiple destinations
 	else {
 		// randomise destination array if fewer targets than destinations
-		if (targets.len() < destinations.len() && option_shuffle_destinations) {
+		if (targets.len() < destinations.len() && options.shuffle_destinations) {
 			destinations = RandomiseArray(destinations);
 		}
 
@@ -180,7 +198,7 @@ Velocity is nullified on teleport
 
 		foreach(index, target in targets) {
 			if (target instanceof CTFPlayer && !target.IsAlive()) {
-				if (respawn) {
+				if (options.respawn) {
 					target.ForceRespawn();
 				} else {
 					continue;
