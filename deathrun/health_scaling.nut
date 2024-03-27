@@ -21,7 +21,7 @@
  *
  * Usage:
  * Add the script to a logic_script (or any entity you wish)
- * Input CallScriptFunction ScaleBlueHealth
+ * Input CallScriptFunction ScaleBlueHealth at the start of your Arena game. Not until.
  */
 
 /**

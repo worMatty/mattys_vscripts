@@ -74,7 +74,7 @@ function BuyRespawn() {
  */
 function RespawnOneRed() {
 	local candidates = Players().Team(TF_TEAM_RED).Dead().Shuffle().Array();
-	if (candidates.Length() == 0) {
+	if (candidates.len() == 0) {
 		return null;
 	}
 	local player = candidates[0];
