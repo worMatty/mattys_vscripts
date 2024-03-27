@@ -27,7 +27,7 @@ feedback <- {
 
 feedback.On <-  function(rate = 1.0) {
 	feedback.StartTimer(rate);
-	EntFire("FEEDBACK_TIMER", "FireTimer", null, -1, null);
+	EntFire(FEEDBACK_TIMER, "FireTimer", null, -1, null);
 }
 
 feedback.Off <-  function() {
@@ -204,7 +204,7 @@ feedback.StartTimer <-  function(rate) {
 	feedback.timer = SpawnEntityFromTable("logic_timer", {
 		RefireTime = rate
 		StartDisabled = false
-		targetname = "timer_feedback"
+		targetname = FEEDBACK_TIMER
 		"OnTimer#1": "worldspawn,RunScriptCode,feedback.CheckDistance(),-1,-1"
 	});
 }
@@ -213,7 +213,7 @@ feedback.StartTimer <-  function(rate) {
  * Kill the timer
  */
 feedback.StopTimer <-  function() {
-	EntFire("timer_feedback", "Kill", null, -1, null);
+	EntFire(FEEDBACK_TIMER, "Kill", null, -1, null);
 }
 
 /**
@@ -225,7 +225,7 @@ feedback.CheckDistance <-  function(radius = 512) {
 		foreach(comment in feedback.comments) {
 			comment.CheckDistance(radius);
 		}
-	} else {
+	} else if (caller.GetName() == FEEDBACK_TIMER) {
 		caller.Kill();
 		printl(__FILE__ + " -- Killed old timer");
 	}
