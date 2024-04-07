@@ -46,137 +46,49 @@
  * set its value to 'true'. Then you can use the branch as a state check. You can also
  * use logic_branch_listener to respond to state changes.
  */
+IncludeScript("matty/holidaylist.nut");
 
-// options
-local options = {
-	trigger_on_spawn = true // trigger relays on round reset
-	debug_mode = false // print extra console messages. disable on production/release maps
-};
+function Precache() {
+	// get date again at start of each round
+	holidays.current_date <- {};
+	LocalTime(holidays.current_date);
+	holidays.forced_holiday <- Convars.GetInt("tf_forced_holiday");
 
-/**
- * Holidays
- *
- * ~ indicates an approximate date based on history
- *
- * Valentines		6	kHoliday_Valentines		February 14th
- * April Fools		11	kHoliday_AprilFools		April 1st
- * Soldier			12	kHoliday_Soldier		April 8th
- * Summer			13	kHoliday_Summer			Range currently unknown
- * Birthday			1	kHoliday_TFBirthday		~August 23rd
- * Hallowe'en		2	kHoliday_Halloween		~October 1st - ~November 7th
- * Christmas		3	kHoliday_Christmas		~December 1st - ~January 7th
- *
- * Full Moon		8	kHoliday_FullMoon		Every 28 days
- */
-
-/**
- * This is a list of all the holidays the script will check for, and will fire a logic_relay for if they are active.
- * It's safe to leave any holidays here that you do not intend to use.
- *
- * Date ranges are required for any custom holiday you create. They are not required for TF holidays, unless you wish to
- * provide a backup date range for when the game server is forcing the holiday using tf_forced_holiday. In reality
- * only Hallowe'en is likely to be forced, but this practice is redundant with Mikusch's holiday cosmetics plugin.
- * Both start date and end date must have both a month and a day.
- *
- * If you want to override a TF holiday with your own date ranges it's as simple as deleting the tfholiday property and
- * supplying a date range. It will be classed as a custom holiday and only the date range will be used. ignore_forced will be redundant.
- *
- * @param {integer} tfholiday kHoliday enum name or integer. Not required by a custom holiday
- * @param {table} start_date Start month and day for custom holiday or forced backup
- * @param {table} end_date End month and day for custom holiday or forced backup
- * @param {bool} ignore_forced If tf_forced_holiday matches the holiday number, revert to date range, or just be inactive
- * @param {bool} forced_on Force the holiday to be active, for testing purposes
- */
-
-holidays <- {
-
-	valentines = {
-		tfholiday = kHoliday_Valentines
+	// print active holidays to console when debug mode is enabled
+	if (holidays.debug_mode) {
+		printl(__FILE__ + " -- Debug mode -- Checking holidays");
+		holidays.CheckHolidays();
 	}
 
-	aprilfools = {
-		tfholiday = kHoliday_AprilFools
-		// forced_on = true // you can force trigger a holiday for testing purpose
-	}
-
-	soldier = {
-		tfholiday = kHoliday_Soldier
-	}
-
-	summer = {
-		tfholiday = kHoliday_Summer
-	}
-
-	birthday = {
-		tfholiday = kHoliday_TFBirthday
-	}
-
-	halloween = {
-		tfholiday = kHoliday_Halloween
-		start_date = {
-			month = 10
-		}
-		end_date = {
-			month = 11
-			day = 7
-		}
-		// ignore_forced = true	// use date range if server forces this holiday
-	}
-
-	christmas = {
-		tfholiday = kHoliday_Christmas
-	}
-
-	fullmoon = {
-		tfholiday = kHoliday_FullMoon
-	}
-
-	// a custom holiday
-	pride = {
-		start_date = {
-			month = 6
-			day = 1
-		}
-		end_date = {
-			month = 6
-			day = 31
-		}
-	}
-
-	// a holiday every 9th day of the month
-	nineday = {
-		start_date = {
-			day = 9
-		}
-		end_date = {
-			day = 9
-		}
+	// trigger active holiday relays
+	if (holidays.trigger_on_spawn) {
+		holidays.TriggerHolidays();
 	}
 }
 
 
-// Nothing modifiable below here
+// Execute only once below this line
 // --------------------------------------------------------------------------------
 
-local current_date = {};
-LocalTime(current_date);
-local forced_holiday = Convars.GetInt("tf_forced_holiday");
-
+// fold holiday constants into root scope
 if (!("holidays" in getroottable())) {
 	foreach(key, value in Constants.EHoliday) {
 		if (!(key in getroottable())) {
 			getroottable()[key] <- value;
 		}
 	}
+} else {
+	// cease executing
+	return;
 }
 
 /**
  * Holiday class
- * Do not edit this
+ * @param {table} params Holiday parameters
  */
-Holiday <- class {
-	constructor(table) {
-		foreach(key, value in table) {
+::Holiday <- class {
+	constructor(params) {
+		foreach(key, value in params) {
 			this[key] = value;
 		}
 
@@ -187,7 +99,7 @@ Holiday <- class {
 				invalid = true;
 			}
 
-			if (ignore_forced == true && options.debug_mode) {
+			if (ignore_forced == true && holidays.debug_mode) {
 				printl(__FILE__ + " -- Holiday '" + name + "' has no start or end date but has ignore_forced set to true\nWhen the server is forcing it, this holiday will not trigger");
 			}
 		}
@@ -201,12 +113,12 @@ Holiday <- class {
 
 			// add start month if it does not exist
 			if (!("month" in start_date)) {
-				start_date.month <- current_date.month;
+				start_date.month <- holidays.current_date.month;
 			}
 
 			// add start day if it does not exist
 			if (!("day" in start_date)) {
-				start_date.day <- current_date.day;
+				start_date.day <- holidays.current_date.day;
 			}
 		}
 
@@ -219,12 +131,12 @@ Holiday <- class {
 
 			// add end month if it does not exist
 			if (!("month" in end_date)) {
-				end_date.month <- current_date.month;
+				end_date.month <- holidays.current_date.month;
 			}
 
 			// add end day if it does not exist
 			if (!("day" in end_date)) {
-				end_date.day <- current_date.day;
+				end_date.day <- holidays.current_date.day;
 			}
 		}
 
@@ -245,7 +157,7 @@ Holiday <- class {
 	invalid = null
 
 	/**
-	 * Check if a holiday is active
+	 * Check if the holiday is active
 	 * @return {bool} True if active, false if not
 	 */
 	function IsActive() {
@@ -288,7 +200,7 @@ Holiday <- class {
 	 * @return {bool} True if TF holiday is forced on by server
 	 */
 	function IsForcedByConvar() {
-		return (tfholiday != null && tfholiday == forced_holiday);
+		return (tfholiday != null && tfholiday == holidays.forced_holiday);
 	}
 
 	/**
@@ -302,8 +214,8 @@ Holiday <- class {
 		}
 
 		if (start_date && end_date) {
-			local month = current_date.month;
-			local day = current_date.day;
+			local month = holidays.current_date.month;
+			local day = holidays.current_date.day;
 
 			local startMonth = start_date.month;
 			local startDay = start_date.day;
@@ -332,76 +244,80 @@ Holiday <- class {
 	 * Relay targetname format: relay_holiday_<name>
 	 */
 	function TriggerRelay() {
-		if (options.debug_mode) {
+		if (debug_mode) {
 			printl(__FILE__ + " -- Debug mode -- Triggering relay for holiday '" + name + "'");
 		}
 		EntFire(format("relay_holiday_%s", name), "Trigger", null, -1);
 	}
 };
 
-// create/reset global holidays table
-::holidays <- {};
+/**
+ * Global holidays table
+ */
+::holidays <- {
+	trigger_on_spawn = true // trigger relays on round reset
+	debug_mode = true // print extra console messages. disable on production/release maps
 
-// convert tables into Holiday instances
-foreach(key, value in holidays) {
-	if (!("name" in value)) {
-		value.name <- key;
+	// debug function to display active holidays to server console
+	function CheckHolidays() {
+		foreach(key, value in this) {
+			if (value instanceof Holiday && value.IsActive()) {
+				printl(__FILE__ + " -- CheckHolidays -- Holiday '" + key + "' is active");
+			}
+		}
 	}
 
-	local holiday = Holiday(value);
-	// holidays[key] <- holiday;
-	::holidays[key] <- holiday;
+	/**
+	 * Cause each active holiday to trigger its logic_relay
+	 */
+	function TriggerHolidays() {
+		if (debug_mode) {
+			printl(__FILE__ + " -- Triggering holidays");
+		}
 
-	// invalid holidays may not work properly
-	if (holiday.invalid == true) {
-		error(__FILE__ + " -- Holiday with incomplete configuration '" + key + "'\n");
-		DumpObject(value);
+		foreach(holiday in holidays) {
+			if (holiday instanceof Holiday && holiday.IsActive()) {
+				holiday.TriggerRelay();
+			}
+		}
 	}
-}
 
-// delete local holidays table
+	function AddHolidays(table) {
+		foreach(key, value in table) {
+			// add or create name string
+			if (!("name" in value)) {
+				value.name <- key;
+			}
+
+			// create instance of Holiday class using data
+			local holiday = Holiday(value);
+
+			// add holiday or reject invalid holidays
+			if (holiday.invalid == true) {
+				error(__FILE__ + " -- Holiday with incomplete configuration '" + key + "'. Not added\n");
+				DumpObject(value);
+			} else {
+				this[key] <- holiday;
+				if (debug_mode) {
+					printl(__FILE__ + " -- Added holiday '" + key + "'");
+				}
+			}
+		}
+	}
+};
+
 delete holidays;
 
-// debug function to display active holidays to server console
-function CheckHolidays() {
-	foreach(key, holiday in holidays) {
-		if (holiday.IsActive()) {
-			printl(__FILE__ + " -- Debug mode -- Holiday '" + key + "' is active");
-		}
+// add holidays from custom script files
+// holidays.AddHolidays(myholidays);
+printl(__FILE__ + " -- Checking each thing");
+foreach(key, value in this) {
+	printl(__FILE__ + " -- " + key + " is a " + typeof value);
+	if (typeof value == "table" && value != holidays) {
+		holidays.AddHolidays(value);
 	}
 }
 
-/**
- * Cause each active holiday to trigger its logic_relay
- */
-function TriggerHolidays() {
-	if (options.debug_mode) {
-		printl(__FILE__ + " -- Debug mode -- Triggering holidays");
-	}
-
-	foreach(holiday in holidays) {
-		if (holiday.IsActive()) {
-			holiday.TriggerRelay();
-		}
-	}
-}
-
-/**
- * Check if holidays are active and print to console
- * Only works id debug mode is enabled
- */
-if (options.debug_mode) {
-	printl(__FILE__ + " -- Debug mode -- Checking holidays");
-	CheckHolidays();
-}
-
-/**
- * Trigger relays for active holidays
- * Only happens if 'trigger on spawn' option is enabled
- */
-if (options.trigger_on_spawn) {
-	TriggerHolidays();
-}
 
 // Work in progress priority stuff below here
 // --------------------------------------------------------------------------------

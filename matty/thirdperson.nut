@@ -1,5 +1,5 @@
 /**
- * Matty's Deathrun Thirdperson Script v2.0
+ * Matty's Deathrun Thirdperson Script v2.1
  *
  * Put players into thirdperson and back into firstperson using either a function call
  * or a trigger, but it respects the player's preference if they are using a server
@@ -28,6 +28,12 @@
  *		my_logic_script > CallScriptFunction > ReturnRedToFP
  */
 
+/*
+	Changelog
+		2.1
+			MakeTP and ReturnToFP can be used with CallScriptFunction and activator
+
+*/
 
 // Setup and resetting
 // --------------------------------------------------------------------------------------------------------------
@@ -85,11 +91,19 @@ function OnPostSpawn() {
  * Make specified players thirdperson
  * @param {array} players CTFPlayer instance or array of them
  */
-function MakeTP(players) {
-	// array check
+function MakeTP(players = null) {
+	// use activator when no argument
+	if (players == null && activator != null && activator instanceof CTFPlayer) {
+		players = activator;
+	}
+
+	// type check
 	if (players instanceof CTFPlayer) {
-		players = [players]
-	};
+		players = [players];
+	} else if (typeof players != "array") {
+		error(__FILE__ + " -- MakeTP - Incorrect object type provided. Must be player or array\n");
+		return;
+	}
 
 	foreach(player in players) {
 		if (player != null && player.IsValid() && player instanceof CTFPlayer) {
@@ -109,11 +123,19 @@ function MakeTP(players) {
  * Make specified players firstperson
  * @param {array} players CTFPlayer instance or array of them
  */
-function ReturnToFP(players) {
-	// array check
+function ReturnToFP(players = null) {
+	// use activator when no argument
+	if (players == null && activator != null && activator instanceof CTFPlayer) {
+		players = activator;
+	}
+
+	// type check
 	if (players instanceof CTFPlayer) {
 		players = [players]
-	};
+	} else if (typeof players != "array") {
+		error(__FILE__ + " -- ReturnToFP - Incorrect object type provided. Must be player or array\n");
+		return;
+	}
 
 	foreach(player in players) {
 		if (player != null && player.IsValid() && player instanceof CTFPlayer) {

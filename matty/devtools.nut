@@ -20,3 +20,15 @@ function GiveWeaponCubemap(player = null) {
 
     printl("Gave cubemap viewmodel to " + player);
 }
+
+function PrintLifeStates() {
+	local maxclients = MaxClients().tointeger();
+
+	for (local i = 1; i <= maxclients; i++) {
+		local player = PlayerInstanceFromIndex(i);
+
+		if (player != null && player.IsValid()) {
+			printl(player + " lifestate: " + NetProps.GetPropInt(player, "m_lifeState"));
+		}
+	}
+}

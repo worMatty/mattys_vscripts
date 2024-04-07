@@ -32,7 +32,7 @@
 	* ChatMsg - Easily print chat messages to players using a variety of targetting methods
 	* ChatColor - Get a chat colour string for a player or team, or specify your own RGB or RGBA value
 	* CenterMsg - Print a message to the 'centre say' area using the targetting system of ChatMsg
-	* Annot - Print training messages to targetted clients
+	* Annot - Print training annotations to targetted clients
 
 	Other stuff
 	* RandomiseArray - Takes an array and returns a shuffled copy
