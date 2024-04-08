@@ -13,7 +13,7 @@ local maxclients = MaxClients().tointeger();
 // This function should only be called once on round restart by one script in your map
 // otherwise there is a risk some of your already-hooked game events will be cleared.
 // That's why I am hooking my player_spawn event in Precache in this script.
-ClearGameEventCallbacks();
+// ClearGameEventCallbacks();
 
 
 function OnGameEvent_player_spawn(params) {

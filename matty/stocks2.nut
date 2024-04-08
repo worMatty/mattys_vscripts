@@ -1,5 +1,5 @@
 /*
-	Matty's Stocks 2
+	Matty's Stocks 2.01
 
 	* Folds all native constants into root scope
 	* Adds several new useful constants
@@ -42,17 +42,17 @@
 	Changelog and more info is at the bottom of the doc.
 */
 
+/*
+	Changelog
+
+	2.01
+	* Removed ClearGameEventCallbacks()
+*/
 
 /**
  * Events
  * ----------------------------------------------------------------------------------------------------
  */
-
-/**
- * Delete all game events
- * This should only be done once on round restart, so do not add this to any other scripts
- */
-ClearGameEventCallbacks();
 
 /**
  * Stop looping ambient sounds just before round restart
