@@ -1,7 +1,8 @@
 /*
 	Matty's Stocks
 
-	A bunch of commonly-used functions to include in other scripts
+	A bunch of commonly-used functions to include in other scripts.
+	Obsolete! Please use stocks2.nut.
 */
 
 
