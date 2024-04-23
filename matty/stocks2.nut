@@ -1,5 +1,5 @@
 /*
-	Matty's Stocks 2.01
+	Matty's Stocks 2.1
 
 	* Folds all native constants into root scope
 	* Adds several new useful constants
@@ -16,7 +16,9 @@
 	* Useful for reducing edict contribution from ambient_generic
 
 	Player helpers
-	* Players() class to easily generate lists of players based on several integrated filtering rules
+	* Players() class to produce a filtered list of players by chaining methods
+	* GetPlayers() function which accepts arbitrary options in a table
+	* Wrapper functions GetReds, GetBlues, LiveReds, LiveBlues, DeadReds, DeadBlues
 
 	CTFPlayer methods
 	* IsAlive
@@ -857,6 +859,140 @@ foreach(key, value in constants) {
 
 		return this;
 	}
+};
+
+/**
+ * Simpler player getter
+ * Options:
+ * * targetname = `whatever*`
+ * * alive = true/false
+ * * team = number/constant (TF_TEAM_RED)
+ * * bot = true/false
+ * * observer = true/false
+ * * shuffle = anything (ignored)
+ * * sort = `userid` (time on server)
+ * @param {table} options Filtering rules
+ * @return {array} Player instances
+ */
+::GetPlayers <-  function(options = {}) {
+	local players = [];
+
+	// targetname search
+	if ("targetname" in options) {
+		local ent = null;
+		while (ent = Entities.FindByName(player, options.targetname)) {
+			if (ent instanceof CTFPlayer) {
+				players.append(ent);
+			}
+		}
+	}
+
+	// else get all players
+	else {
+		for (local i = 1; i <= maxclients; i++) {
+			local player = PlayerInstanceFromIndex(i);
+
+			if (player != null && player.IsValid()) {
+				players.push(player);
+			}
+		}
+	}
+
+	// alive
+	if ("alive" in options) {
+		players = players.filter(function(index, player) {
+			return (player.IsAlive() == options.alive)
+		})
+	}
+
+	// team
+	if ("team" in options) {
+		players = players.filter(function(index, player) {
+			return (player.GetTeam() == options.team)
+		})
+	}
+
+	// bot
+	if ("bot" in options) {
+		players = players.filter(function(index, player) {
+			return (IsPlayerABot(player) == options.bot)
+		})
+	}
+
+	// observer
+	if ("observer" in options) {
+		players = players.filter(function(index, player) {
+			return (!!NetProps.GetPropInt(player, "m_iObserverMode") == options.observer);
+		})
+	}
+
+	// shuffle
+	if ("shuffle" in options) {
+		local players_new = [];
+		while (players.len() > 0) {
+			players_new.push(players.remove(RandomInt(0, players.len() - 1)));
+		}
+		players = players_new;
+	}
+
+	// sort
+	if ("sort" in options) {
+		if (options.sort == "userid") {
+			players.sort(function(a, b) {
+				return (a.UserId()) <=> (b.UserId());
+			})
+		}
+	}
+
+	return players;
+};
+
+/**
+ * Get red players
+ * @return {array} Array of player instances
+ */
+::GetReds <-  function() {
+	return Players().Team(TF_TEAM_RED).Array();
+};
+
+/**
+ * Get live red players
+ * @return {array} Array of player instances
+ */
+::LiveReds <-  function() {
+	return Players().Team(TF_TEAM_RED).Alive().Array();
+};
+
+/**
+ * Get dead red players
+ * @return {array} Array of player instances
+ */
+::DeadReds <-  function() {
+	return Players().Team(TF_TEAM_RED).Dead().Array();
+};
+
+/**
+ * Get blue players
+ * @return {array} Array of player instances
+ */
+::GetBlues <-  function() {
+	return Players().Team(TF_TEAM_BLUE).Array();
+};
+
+/**
+ * Get live blue players
+ * @return {array} Array of player instances
+ */
+::LiveBlues <-  function() {
+	return Players().Team(TF_TEAM_BLUE).Alive().Array();
+};
+
+/**
+ * Get dead blue players
+ * @return {array} Array of player instances
+ */
+::DeadBlues <-  function() {
+	return Players().Team(TF_TEAM_BLUE).Dead().Array();
 };
 
 
