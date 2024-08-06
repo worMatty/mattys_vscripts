@@ -1,40 +1,40 @@
 /*
-Enables a map author to view feedback for their map
+	Enables a map author to view feedback for their map
 
-Usage:
-1. Ensure mapname.nut is in tf/scripts/vscripts/feedback
-	This is the file of feedback comments provided to you
-2. Put this script somewhere in tf/scripts/vscripts
-3. In server console do `script_execute feedback_viewer.nut`
-	This will import the feedback and add the feedback viewing functions
-4. In server console, do `script feedback.On()`
-	This will enable showing feedback comments.
-	Move closer to them to read them.
+	Usage:
+	1. Ensure mapname.nut is in tf/scripts/vscripts/feedback
+		This is the file of feedback comments provided to you
+	2. Put this script somewhere in tf/scripts/vscripts
+	3. In server console do `script_execute feedback_viewer.nut`
+		This will import the feedback and add the feedback viewing functions
+	4. In server console, do `script feedback.On()`
+		This will enable showing feedback comments.
+		Move closer to them to read them.
 
-Other functions
-	feedback.Off()
-		Hide the feedback
-	feedback.ImportFeedback()
-		Reimport feedback from the file
-	feedback.ShowAll()
-		Show all feedback as expanded. Should do feedback.Off() first so the timer doesn't interfere
-	feedback.HideAll()
-		The opposite of ShowAll(). You figure it out
+	Other functions
+		feedback.Off()
+			Hide the feedback
+		feedback.ImportFeedback()
+			Reimport feedback from the file
+		feedback.ShowAll()
+			Show all feedback as expanded. Should do feedback.Off() first so the timer doesn't interfere
+		feedback.HideAll()
+			The opposite of ShowAll(). You figure it out
 
 */
 
 /*
-Todo
-3. Show positions of feedback by a sprite in the world set to render over geometry
-4. Cycle to the pos and view angles of each piece of feedback using a command or controls
-5. When cycling, show feedback in text, csay, hsay training message or TA
-6. Show CONSOLE feedback in text
-7. Spawn a prop or sprite at the location of feedback because the TA's origin is hard to spot
-8. Move overlapping feedback apart
+	Todo
+	3. Show positions of feedback by a sprite in the world set to render over geometry
+	4. Cycle to the pos and view angles of each piece of feedback using a command or controls
+	5. When cycling, show feedback in text, csay, hsay training message or TA
+	6. Show CONSOLE feedback in text
+	7. Spawn a prop or sprite at the location of feedback because the TA's origin is hard to spot
+	8. Move overlapping feedback apart
 */
 
 /*
-Bugs
+	Bugs
 */
 
 local FEEDBACK_TIMER = "timer_feedback";

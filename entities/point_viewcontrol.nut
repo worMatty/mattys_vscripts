@@ -35,6 +35,12 @@
 			* Set and restore m_takedamage on players on camera Enable and Disable to prevent invincibility
 */
 
+/*
+	Possible bug
+	If you enable a camera while a player already has one enabled, you override their stored m_takedamage value
+	with 0. When disabling a camera later, it restores 0 instead of 1.
+*/
+
 local maxclients = MaxClients();
 
 // ----------------------------------------------------------------------------------------------------

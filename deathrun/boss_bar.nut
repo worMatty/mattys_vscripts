@@ -25,6 +25,16 @@
  * You do not need to do anything on round restart because the logic_script is killed and recreated by the game.
  */
 
+/*
+	Changelog
+	0.2.1
+		* Fix: An infinite loop caused by the script disabling and hiding the bar repeatedly when it
+			detected outside interference. This produced console spam, which caused servers to freeze.
+		* Change: When outside interference is detected, and the script disables itself, it will
+			no longer change the bar's value in order to hide it. This allows the bar to continue
+			displaying the value provided by the outside input with no visual disruption.
+*/
+
 // Options
 local auto_color = true; // auto colour the bar green when all blues are in uber condition
 local debug = false; // debug messages. set this to false for release
@@ -150,11 +160,13 @@ function EnableBar() {
  * Hide the bar.
  * This is called internally when there is a problem or when the round ends.
  */
-function DisableBar() {
+function DisableBar(hide_bar = true) {
 	if (enabled) {
+		enabled = false;
 		AddThinkToEnt(self, ""); // remove the think
-		SetBarValue(0);
-		enabled = false; // must be done last because SetBarValue checks if the bar is enabled
+		if (hide_bar) {
+			SetBarValue(0);
+		}
 		if (debug) printl(__FILE__ + " disabled bar");
 	}
 }
@@ -171,6 +183,12 @@ function Think() {
 	// Disable on round win, or if bar not valid, or no health data returned due to no valid entities
 	if (GetRoundState() == round_state_win || !IsBarValid() || data == null) {
 		DisableBar();
+		return;
+	}
+
+	if (GetBarValue() != prev_bar_val) {
+		printl(__FILE__ + " Outside interference with monster_resource bar value detected. Disabling");
+		DisableBar(false);
 		return;
 	}
 
@@ -269,12 +287,6 @@ function IsBarValid() {
  */
 function SetBarValue(val, max = 255) {
 	if (!IsBarValid()) {
-		DisableBar();
-		return;
-	}
-
-	if (enabled && GetBarValue() != prev_bar_val) { // todo: do I need to check if enabled?
-		printl(__FILE__ + " Outside interference with monster_resource bar value detected. Disabling");
 		DisableBar();
 		return;
 	}
