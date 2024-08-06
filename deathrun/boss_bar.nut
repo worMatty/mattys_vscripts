@@ -1,6 +1,6 @@
 /**
  * Matty's Deathrun Boss Bar
- * Version 0.2
+ * Version 0.2.1
  *
  * Features:
  * - Supports variable number of blues
