@@ -1,5 +1,5 @@
 /*
-	Matty's Stocks 2.1
+	Matty's Stocks 2.1.1
 
 	* Folds all native constants into root scope
 	* Adds several new useful constants
@@ -47,8 +47,13 @@
 /*
 	Changelog
 
-	2.01
-	* Removed ClearGameEventCallbacks()
+	2.1.1
+		* Fixed ChatMsg not finding colour codes (\x01 etc.) in supplied message argument
+		* Fixed GetPlayers targetname search referencing a non-existent variable
+	2.1
+		* GetPlayers simpler player-getter function, plus wrappers like GetReds, LiveReds, DeadReds etc.
+	2.0.1
+		* Removed ClearGameEventCallbacks()
 */
 
 /**
@@ -880,7 +885,7 @@ foreach(key, value in constants) {
 	// targetname search
 	if ("targetname" in options) {
 		local ent = null;
-		while (ent = Entities.FindByName(player, options.targetname)) {
+		while (ent = Entities.FindByName(ent, options.targetname)) {
 			if (ent instanceof CTFPlayer) {
 				players.append(ent);
 			}
@@ -1158,8 +1163,17 @@ foreach(key, value in this) {
  */
 ::ChatMsg <-  function(targets, message, destination = HUD_PRINTTALK) {
 	// add colour code to start of line if colour is used without it
-	if (message.find("\x0") && !startswith(message, "\x0")) {
-		message = "\x01" + message;
+	local len = message.len();
+	for (local i = 0; i < len; i++) {
+		local char = message[i];
+
+		if (char == CHAT_COLOR_01[0] || char == CHAT_COLOR_07[0] || char == CHAT_COLOR_08[0]) {
+			if (i == 0) {
+				break;
+			}
+			message = CHAT_COLOR_01 + message;
+			break;
+		}
 	}
 
 	// all players

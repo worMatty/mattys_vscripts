@@ -30,15 +30,19 @@
 
 /*
 	Changelog
+		0.4.3
+			* Replaced previously-created AcceptInput RunScriptCode calls with direct property changes
+		0.4.2
+			* Replaced EntFire function calls with AcceptInput, which are synchronous and executed immediately.
+		0.4.1
+			* Fixed an issue where calling the enable function twice on a player would overwrite their stored
+			  m_takedamage value with 0, making them immortal when disabling the camera and restoring the value.
+			* When disabling, players' m_takedamage value will be set to 2 if they are alive, instead of restoring
+			  the saved value from when the camera was enabled. This fixes the  aforementioned issue and guards
+			  against players who were respawned while watching receiving immortality from a saved m_takedamage value of 0.
 		0.4
 			* Replaced round restart event hook with a preserved logic_eventlistener
 			* Set and restore m_takedamage on players on camera Enable and Disable to prevent invincibility
-*/
-
-/*
-	Possible bug
-	If you enable a camera while a player already has one enabled, you override their stored m_takedamage value
-	with 0. When disabling a camera later, it restores 0 instead of 1.
 */
 
 local maxclients = MaxClients();
@@ -66,7 +70,6 @@ function DisableCameraAll() {
 		local player = PlayerInstanceFromIndex(i);
 
 		if (player != null && player.IsValid()) {
-			// printl(__FILE__ + " -- DisableCameraAll -- Firing DisableCamera() with " + player);
 			DisableCamera(player);
 		}
 	}
@@ -86,23 +89,14 @@ function EnableCamera(player = null) {
 	player.ValidateScriptScope();
 	local scope = player.GetScriptScope();
 
-	// conditions
 	player.RemoveCond(7); // stop taunts
 	player.AddCond(87); // freeze input
-
-	// store properties
-	scope.__m_nForceTauntCam <- NetProps.GetPropInt(player, "m_nForceTauntCam");
-	scope.__takedamage <- NetProps.GetPropInt(player, "m_takedamage");
-	scope.current_pvc <- self;
-
-	// don't take damage
-	NetProps.SetPropInt(player, "m_takedamage", 0);
-
-	// set first person perspective
-	player.SetForcedTauntCam(0);
-
-	// enable the camera for this player
-	EntFireByHandle(self, "Enable", "", -1, player, null);
+	scope.__m_nForceTauntCam <- NetProps.GetPropInt(player, "m_nForceTauntCam"); // store current taunt perspective
+	scope.current_pvc <- self; // store current pvc ent
+	NetProps.SetPropInt(player, "m_takedamage", 0); // take no damage
+	player.SetForcedTauntCam(0); // set first-person perspective
+	// EntFireByHandle(self, "Enable", "", -1, player, null); // old EntFireByHandle-based code
+	self.AcceptInput("Enable", "", player, null); // new AcceptInput-based code
 }
 
 /**
@@ -122,23 +116,23 @@ function DisableCamera(player = null) {
 		return;
 	}
 
-	// store current lifestate and set lifestate to 'alive' so the Disable input works on them
-	EntFireByHandle(player, "RunScriptCode", "self.GetScriptScope().__lifestate <- NetProps.GetPropInt(self, `m_lifeState`); NetProps.SetPropInt(self, `m_lifeState`, 0)", -1, player, player);
+	// store player's current lifestate, and set their lifestate to 'alive' so the camera functions for them
+	scope.__lifestate <- NetProps.GetPropInt(player, "m_lifeState");
+	NetProps.SetPropInt(player, "m_lifeState", 0);
 
-	// configure the camera to use this player, and Disable it
-	EntFireByHandle(self, "RunScriptCode", "NetProps.SetPropEntity(self, `m_hPlayer`, activator)", -1, player, player);
-	EntFireByHandle(self, "Disable", null, -1, player, player);
+	// set camera's user property to the player, then Disable the camera for them
+	NetProps.SetPropEntity(self, "m_hPlayer", player);
+	self.AcceptInput("Disable", null, player, player);
 
-	// restore lifestate, taunt perspective and takedamage
-	EntFireByHandle(player, "RunScriptCode", "NetProps.SetPropInt(self, `m_lifeState`, self.GetScriptScope().__lifestate)", -1, player, player);
-	EntFireByHandle(player, "RunScriptCode", "NetProps.SetPropInt(self, `m_takedamage`, self.GetScriptScope().__takedamage)", -1, player, player);
-	EntFireByHandle(player, "SetForcedTauntCam", scope["__m_nForceTauntCam"].tostring(), -1, player, null);
+	// restore the player's previous lifestate and set the appropriate takedamage value
+	NetProps.SetPropInt(player, "m_lifeState", player.GetScriptScope().__lifestate);
+	if (player.IsAlive()) {
+		NetProps.SetPropInt(player, "m_takedamage", 2);
+	}
 
-	// remove input freeze condition
-	player.RemoveCond(87);
-
-	// reset assigned camera
-	scope.current_pvc = null;
+	player.AcceptInput("SetForcedTauntCam", scope["__m_nForceTauntCam"].tostring(), player, null); // restore taunt perspective
+	player.RemoveCond(87); // remove input freeze condition
+	scope.current_pvc = null; // reset assigned camera
 }
 
 // ----------------------------------------------------------------------------------------------------
