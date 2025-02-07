@@ -2,7 +2,8 @@
 	Holiday list
 	Create a copy of this list for your map like so:
 	tf/vscripts/mapname/holiday_list.nut
-	Add it to your holidays.nut logic_script entity.
+	Add the script to the logic_script entity you made for holidays.nut.
+	Both scripts should be in the field. This script's data will be added to the entity.
 	Customise the holidays in the 'myholidays' table. Examples are further down.
 	Custom holiday ranges only require a date range.
 
