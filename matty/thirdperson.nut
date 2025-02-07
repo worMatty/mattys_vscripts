@@ -1,38 +1,50 @@
 /**
- * Matty's Deathrun Thirdperson Script v2.1
+ * Matty's Deathrun Thirdperson Script v2.2
  *
- * Put players into thirdperson and back into firstperson using either a function call
- * or a trigger, but it respects the player's preference if they are using a server
- * command to set their perspective.
+ * Easily put players into thirdperson and back into firstperson.
+ * Useful for platforming minigames or when the player is affected by something (e.g. stun).
+ * Use with triggers, so that players are in thirdperson while inside their bounds.
+ * Or apply to specific players directly using I/O.
+ *
+ * If the server is likely to use a SourceMod plugin enabling them to go in and out of thirdperson
+ * using a command, then using this script is better than setting the player into thirdperson
+ * using the native SetForcedTauntCam input. The script checks if the player has put
+ * themselves into thirdperson and respects their preference by not changing their camera.
+ * It's common for deathrun servers to use such a SourceMod plugin.
  *
  * How to use:
- * Add the script to a logic_script entity. You have two ways to activate it:
+ * Add the script to a logic_script entity. There are two ways to use it:
  *
- * 1. Enter the targetnames of any triggers you wish to put people in thirdperson
- * 		in the EntityGroup fields. One targetname per line, starting from 0.
- * 		They must be unique. If there are more than 16, you can create more
- * 		logic_scripts with the same script and name the remaining triggers there.
- * 		When players touch the triggers they will be put in thirdperson, and
- * 		returned to firstperson when they leave it.
+ * 1. In the logic_script's EntityGroup fields, enter the targetnames of the triggers
+ * 		you wish to grant thirdperson. Use one field per targetname. The script will
+ * 		search for all triggers with the same name.
+ * 2. Use inputs to the logic_script. See the examples below
  *
- * 2. Use I/O triggered by the player !activator, sent to the logic_script:
- * 		OnStartTouch > my_logic_script > RunScriptCode MakeTP(activator)
- * 		OnEndTouch > my_logic_script > ReturnToFP(activator)
+ * Setting the !activator into thirdperson:
+ * 		logic_script > CallScriptFunction > MakeTP
+ * 		logic_script > RunScriptCode > MakeTP(activator)
  *
- * Players will be returned to firstperson on round restart so you don't need to
- * do this yourself! The two functions above accept a player instance or an array
- * of player instances.
- *
- * Extra functions to put all live red players in thirdperson or firstperson state:
- *		my_logic_script > CallScriptFunction > MakeRedTP
- *		my_logic_script > CallScriptFunction > ReturnRedToFP
+ * Setting a specific player instance, or array of players into thirdperson:
+ * 		logic_script > RunScriptCode > MakeTP(player)
+ * 		logic_script > RunScriptCode > MakeTP(players)
+ * If you use my stocks2.nut file you can easily create arrays of groups of players,
+ * such as all players, one team only, alive or dead, humans or bots, within a radius, etc.
+ * 		logic_script > RunScriptCode > MakeTP(LiveReds())
+ *		logic_script > RunScriptCode > MakeTP(GetPlayers({ alive = true }))
+ * If you want to know if you can do something, ask me.
+
+ * Players will be returned to firstperson automatically on round restart.
+ * To return players to firstperson manually, replace the MakeTP calls above with ReturnToFP.
  */
 
 /*
 	Changelog
+		2.2
+			Improved documentation
+			Script searches for all triggers with the same targetname as those entered in EntityGroup fields
+			Removed the player array helper functions as they are superceded by those in stocks2.nut.
 		2.1
 			MakeTP and ReturnToFP can be used with CallScriptFunction and activator
-
 */
 
 // Setup and resetting
@@ -54,25 +66,34 @@ thirdperson.ent = self;
  */
 function OnPostSpawn() {
 	// hook triggers
-	foreach(entity in EntityGroup) {
-		if (startswith(entity.GetClassname(), "trigger_")) {
-			entity.ValidateScriptScope();
-
-			entity.GetScriptScope().MakeActivatorTP <-  function() {
-				if (activator instanceof CTFPlayer) {
-					thirdperson.ent.GetScriptScope().MakeTP(activator);
-				}
+	if ("EntityGroup" in self.GetScriptScope()) {
+		foreach(entity in EntityGroup) {
+			if (entity == null || !startswith(entity.GetClassname(), "trigger_")) {
+				continue;
 			}
 
-			entity.GetScriptScope().MakeActivatorFP <-  function() {
-				if (activator != null && activator.IsValid() && activator instanceof CTFPlayer) {
-					thirdperson.ent.GetScriptScope().ReturnToFP(activator);
+			local triggers = [];
+			local trigger = null;
+
+			while (trigger = Entities.FindByName(trigger, entity.GetName())) {
+				trigger.ValidateScriptScope();
+
+				trigger.GetScriptScope().MakeActivatorTP <-  function() {
+					if (activator instanceof CTFPlayer) {
+						thirdperson.ent.GetScriptScope().MakeTP(activator);
+					}
 				}
+
+				trigger.GetScriptScope().MakeActivatorFP <-  function() {
+					if (activator != null && activator.IsValid() && activator instanceof CTFPlayer) {
+						thirdperson.ent.GetScriptScope().ReturnToFP(activator);
+					}
+				}
+
+				trigger.ConnectOutput("OnStartTouch", "MakeActivatorTP");
+				trigger.ConnectOutput("OnEndTouch", "MakeActivatorFP");
 			}
 		}
-
-		entity.ConnectOutput("OnStartTouch", "MakeActivatorTP");
-		entity.ConnectOutput("OnEndTouch", "MakeActivatorFP");
 	}
 
 	// return players in tp to fp
@@ -155,37 +176,6 @@ function ReturnToFP(players = null) {
 		}
 	}
 }
-
-
-// Helper functions
-// --------------------------------------------------------------------------------------------------------------
-
-local maxclients = MaxClients().tointeger();
-local red_team = Constants.ETFTeam.TF_TEAM_RED;
-
-function GetLiveReds() {
-	local reds = [];
-
-	for (local i = 1; i <= maxclients; i++) {
-		local player = PlayerInstanceFromIndex(i);
-		if (player != null && player.IsValid() && player.GetTeam() == red_team && NetProps.GetPropInt(player, "m_lifeState") == 0) {
-			reds.append(player);
-		}
-	}
-
-	return reds;
-}
-
-function MakeRedTP() {
-	local reds = GetLiveReds();
-	MakeTP(reds);
-}
-
-function ReturnRedToFP() {
-	local reds = GetLiveReds();
-	ReturnToFP(reds);
-}
-
 
 // Notes
 // --------------------------------------------------------------------------------------------------------------
