@@ -1,6 +1,6 @@
 /**
  * Matty's Deathrun Health Scaling
- * Version 1.1 - modified to use stocks2
+ * Version 1.1.1 - modified to use stocks2
  *
  * Scales the health of any blue players up to an amount appropriate for the number of live reds.
  *
@@ -30,6 +30,12 @@
  * See if reds...
  * Give more health to blue if they only have melee?
  */
+
+/*
+	Changelog
+		Version 1.1.1
+		* Removed unnecessary stocks2.nut CleanGameEventCallbacks call
+*/
 
 // includes
 IncludeScript("matty/stocks2.nut");
@@ -69,8 +75,6 @@ function ScaleBlueHealth() {
 
 // Event hooks
 // --------------------------------------------------------------------------------
-
-CleanGameEventCallbacks();
 
 function OnScriptHook_OnTakeDamage(params) {
 	if (params.const_entity.IsPlayer() &&
