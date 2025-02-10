@@ -108,14 +108,11 @@ function ScaleBlueHealth(announce = true, reduce_backstab = true) {
  */
 function OnScriptHook_OnTakeDamage(params) {
 	local ent = params.const_entity;
-	// if (developer()) {
-	// 	printl(__FILE__ + " -- Damage hook -- victim: " + ent + ", reduced_backstab len: " + reduced_backstab.len() + ", found in array: " + (reduced_backstab.find(ent) != null));
-	// 	printl(__FILE__ + " -- Damage hook -- victim: " + ent);
-	// }
-	// if (ent.IsPlayer() && params.damage_custom == TF_DMG_CUSTOM_BACKSTAB && reduced_backstab.find(ent) != null) {
-	// 	if (developer()) printl(__FILE__ + " -- " + ent + " received backstab damage from " + params.attacker);
-	// 	params.damage = 100; // backstabs always crit, which multiplies this to 300
-	// }
+
+	if (ent.IsPlayer() && params.damage_custom == TF_DMG_CUSTOM_BACKSTAB && reduced_backstab.find(ent) != null) {
+		if (developer()) printl(__FILE__ + " -- " + ent + " received backstab damage from " + params.attacker);
+		params.damage = 100; // backstabs always crit, which multiplies this to 300
+	}
 }
 
 /**
@@ -124,13 +121,14 @@ function OnScriptHook_OnTakeDamage(params) {
 function OnGameEvent_player_death(params) {
 	local player = GetPlayerFromUserID(params.userid);
 	local index = reduced_backstab.find(player);
+
 	if (index != null) {
 		if (developer()) printl(__FILE__ + " -- " + player + " died. Removing them from reduced_backstab array");
 		reduced_backstab.remove(index);
 		if (developer()) printl(__FILE__ + " -- New reduced_backstab array len = " + reduced_backstab.len());
 	}
 
-	// todo: remove damage hook
+	// todo: remove damage hook when array is empty
 }
 
 /*
