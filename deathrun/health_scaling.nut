@@ -1,6 +1,6 @@
 /*
 	Deathrun Health Scaling
-	Version 1.1.2 by worMatty
+	Version 1.2 by worMatty
 
 	Scales the health of any blue players up to an amount appropriate for the number of live reds.
 	Should be used on the commencement of an Arena game after any reds have been respawned.
@@ -35,6 +35,12 @@
 
 /*
 	Changelog
+		1.2
+			* Added a parameter to the scale function that gives the user the option not to
+			  limit backstab damage on the scaled players.
+			* Damage hook only affects players that have had their health scaled
+			* Damage hook won't be added until the first time the function is called
+			* Added debug messages that appear when `developer` mode is on
 		1.1.2
 			* Slightly improved instructions
 			* Moved announcement option into function call
@@ -44,35 +50,55 @@
 */
 
 IncludeScript("matty/stocks2.nut");
+local reduced_backstab = [];
+local hook_added = false;
 
 /**
  * Scale the health of blue players.
  * Health is scaled in proportion with the number of red players alive.
  * @param {bool} announce Announce the new value of blue players' health to chat
+ * @param {bool} reduce_backstab The player's backstab damaged received will be capped
  */
-function ScaleBlueHealth(announce = true) {
+function ScaleBlueHealth(announce = true, reduce_backstab = true) {
 	local number_live_reds = LiveReds().len();
 	local live_blues = LiveBlues();
 	local number_live_blues = live_blues.len();
 
 	if (number_live_blues >= number_live_reds || !number_live_blues) {
+		if (developer()) printl(__FILE__ + " -- No scaling performed as the teams have equal numbers or there are no blues");
 		return; // no scaling on equal team numbers or when no blues
 	}
 
 	foreach(player in live_blues) {
+		// calculate health to scale to
 		local health = GetTFClassHealth(player.GetPlayerClass()).tofloat();
-
 		health = (((number_live_reds * 2) * health) - health);
 		health /= number_live_blues;
 
+		// add attributes and scale health
 		player.AddCustomAttribute("max health additive bonus", health - GetTFClassHealth(player.GetPlayerClass()), -1);
 		player.SetHealth(health.tointeger());
 		player.AddCustomAttribute("health from packs decreased", GetTFClassHealth(player.GetPlayerClass()) / health, -1);
+		if (developer()) printl(__FILE__ + " -- " + player + " health has been scaled to " + health.tointeger());
 
+		// we wish to reduced backstab damage on this player, and they are not already in the array
+		if (reduce_backstab == true && reduced_backstab.find(player) == null) {
+			reduced_backstab.append(player);
+			if (developer()) printl(__FILE__ + " -- " + player + " will have their incoming backstab damage capped");
+		}
+
+		// we wish to announce new health to chat
 		if (announce) {
 			local message = format("%s now has \x05%d \x01health", player.CName(), health.tointeger());
 			ChatMsg(null, message);
 		}
+	}
+
+	// add damage hook
+	if (hook_added == false) {
+		hook_added = true;
+		__CollectGameEventCallbacks(self.GetScriptScope());
+		if (developer()) printl(__FILE__ + " -- Damage hook added");
 	}
 }
 
@@ -81,14 +107,31 @@ function ScaleBlueHealth(announce = true) {
  * so they can't be one-shotted
  */
 function OnScriptHook_OnTakeDamage(params) {
-	if (params.const_entity.IsPlayer() &&
-		params.const_entity.GetTeam() == TF_TEAM_BLUE &&
-		params.damage_custom == TF_DMG_CUSTOM_BACKSTAB) {
-		params.damage = 100; // backstabs always crit, which multiplies this to 300
-	}
+	local ent = params.const_entity;
+	// if (developer()) {
+	// 	printl(__FILE__ + " -- Damage hook -- victim: " + ent + ", reduced_backstab len: " + reduced_backstab.len() + ", found in array: " + (reduced_backstab.find(ent) != null));
+	// 	printl(__FILE__ + " -- Damage hook -- victim: " + ent);
+	// }
+	// if (ent.IsPlayer() && params.damage_custom == TF_DMG_CUSTOM_BACKSTAB && reduced_backstab.find(ent) != null) {
+	// 	if (developer()) printl(__FILE__ + " -- " + ent + " received backstab damage from " + params.attacker);
+	// 	params.damage = 100; // backstabs always crit, which multiplies this to 300
+	// }
 }
 
-__CollectGameEventCallbacks(this);
+/**
+ * Remove scaled player from the no-backstab array if they're in there
+ */
+function OnGameEvent_player_death(params) {
+	local player = GetPlayerFromUserID(params.userid);
+	local index = reduced_backstab.find(player);
+	if (index != null) {
+		if (developer()) printl(__FILE__ + " -- " + player + " died. Removing them from reduced_backstab array");
+		reduced_backstab.remove(index);
+		if (developer()) printl(__FILE__ + " -- New reduced_backstab array len = " + reduced_backstab.len());
+	}
+
+	// todo: remove damage hook
+}
 
 /*
 	Possible future features:
