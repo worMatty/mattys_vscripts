@@ -1,44 +1,43 @@
-/**
- * Matty's Deathrun Thirdperson Script v2.2
- *
- * Easily put players into thirdperson and back into firstperson.
- * Useful for platforming minigames or when the player is affected by something (e.g. stun).
- * Use with triggers, so that players are in thirdperson while inside their bounds.
- * Or apply to specific players directly using I/O.
- *
- * If the server is likely to use a SourceMod plugin enabling them to go in and out of thirdperson
- * using a command, then using this script is better than setting the player into thirdperson
- * using the native SetForcedTauntCam input. The script checks if the player has put
- * themselves into thirdperson and respects their preference by not changing their camera.
- * It's common for deathrun servers to use such a SourceMod plugin.
- *
- * How to use:
- * Add the script to a logic_script entity. There are two ways to use it:
- *
- * 1. In the logic_script's EntityGroup fields, enter the targetnames of the triggers
- * 		you wish to grant thirdperson. Use one field per targetname. The script will
- * 		search for all triggers with the same name.
- * 2. Use inputs to the logic_script. See the examples below
- *
- * Setting the !activator into thirdperson:
- * 		logic_script > CallScriptFunction > MakeTP
- * 		logic_script > RunScriptCode > MakeTP(activator)
- *
- * Setting a specific player instance, or array of players into thirdperson:
- * 		logic_script > RunScriptCode > MakeTP(player)
- * 		logic_script > RunScriptCode > MakeTP(players)
- * If you use my stocks2.nut file you can easily create arrays of groups of players,
- * such as all players, one team only, alive or dead, humans or bots, within a radius, etc.
- * 		logic_script > RunScriptCode > MakeTP(LiveReds())
- *		logic_script > RunScriptCode > MakeTP(GetPlayers({ alive = true }))
- * If you want to know if you can do something, ask me.
+/*
+	Thirdperson v2.3
+	By worMatty
 
- * Players will be returned to firstperson automatically on round restart.
- * To return players to firstperson manually, replace the MakeTP calls above with ReturnToFP.
- */
+	Put players into thirdperson and back into firstperson.
+	Very useful for minigames where the player benefits from seeing themselves, such as spinners,
+	platforming, or when the player is affected by something such as a loss of control effect.
+
+	If a player has had their perspective changed via external means, such as a server plugin,
+	the script will not change it, out of respect for their preference.
+
+	Usage:
+		Add the script to a logic_script.
+
+		If you want to put players in and out of thirdperson while inside a trigger,
+		add the following outputs to it:
+			OnStartTouch > !activator > RunScriptCode > self.SetThirdPerson()
+			OnEndTouch > !activator > RunScriptCode > self.SetFirstPerson()
+
+		If you want to put all players into and out of thirdperson using logic, do this:
+			OnWhatever > player > RunScriptCode > self.SetThirdPerson()
+			OnWhatever > player > RunScriptCode > self.SetFirstPerson()
+
+		If you only want to put live red players into and out of thirdperson, do this:
+			OnWhatever > player > RunScriptCode >
+			if (self.IsAlive() && self.GetTeam == Constants.ETFTeam.TF_TEAM_RED) self.SetThirdPerson()
+
+		Players will be returned to firstperson on round restart.
+		If you do not want this to happen, send the following input to any entity, including this one:
+			OnWhatever > worldspawn > RunScriptCode > thirdperson.firstperson_on_round_restart = false
+*/
 
 /*
 	Changelog
+		2.3
+			Changed how the script works.
+			It now adds two functions to CTFPlayer, SetThirdPerson() and SetFirstPerson().
+			Properties that track if the player is in thirdperson or should be ignored are stored on the player.
+			Players are still put back in firstperson on round restart but this is now able to be disabled.
+			The mapper can set thirdperson.firstperson_on_round_restart to false.
 		2.2
 			Improved documentation
 			Script searches for all triggers with the same targetname as those entered in EntityGroup fields
@@ -47,135 +46,91 @@
 			MakeTP and ReturnToFP can be used with CallScriptFunction and activator
 */
 
-// Setup and resetting
-// --------------------------------------------------------------------------------------------------------------
+if (!("MakeThirdPerson" in CTFPlayer)) {
+	getroottable().thirdperson <- {
+		firstperson_on_round_restart = true
+	};
 
-// using global storage to transcend rounds and enable use of multiple logic_scripts
-if (!("thirdperson" in getroottable())) {
-	::thirdperson <- {
-		players_to_ignore = []
-		players_in_tp = []
-		ent = null
-	}
-}
+	CTFPlayer.in_thirdperson <- null;
+	CTFPlayer.ignore_thirdperson <- null;
 
-thirdperson.ent = self;
+	/**
+	 * Put player into thirdperson.
+	 * If a player was put into thirdperson by external means when this is called,
+	 * the player will be marked to be ignored by future perspective changes from the script.
+	 */
+	CTFPlayer.MakeThirdPerson <- function() {
+		// don't change players who control their own perspective
+		if (this.ignore_thirdperson) {
+			return;
+		}
 
-/**
- * Hook each trigger named in EntityGroup
- */
-function OnPostSpawn() {
-	// hook triggers
-	if ("EntityGroup" in self.GetScriptScope()) {
-		foreach(entity in EntityGroup) {
-			if (entity == null || !startswith(entity.GetClassname(), "trigger_")) {
-				continue;
-			}
-
-			local triggers = [];
-			local trigger = null;
-
-			while (trigger = Entities.FindByName(trigger, entity.GetName())) {
-				trigger.ValidateScriptScope();
-
-				trigger.GetScriptScope().MakeActivatorTP <-  function() {
-					if (activator instanceof CTFPlayer) {
-						thirdperson.ent.GetScriptScope().MakeTP(activator);
-					}
-				}
-
-				trigger.GetScriptScope().MakeActivatorFP <-  function() {
-					if (activator != null && activator.IsValid() && activator instanceof CTFPlayer) {
-						thirdperson.ent.GetScriptScope().ReturnToFP(activator);
-					}
-				}
-
-				trigger.ConnectOutput("OnStartTouch", "MakeActivatorTP");
-				trigger.ConnectOutput("OnEndTouch", "MakeActivatorFP");
+		// player is already in thirdperson perspective and we did not put them there
+		if (NetProps.GetPropInt(this, "m_nForceTauntCam")) {
+			if (this.in_thirdperson == false) {
+				this.ignore_thirdperson = true; // mark them to be ignored
 			}
 		}
-	}
-
-	// return players in tp to fp
-	ReturnToFP(thirdperson.players_in_tp);
-
-	// reset arrays
-	thirdperson.players_to_ignore <- [];
-	thirdperson.players_in_tp <- [];
-}
-
-
-// Functions
-// --------------------------------------------------------------------------------------------------------------
-
-/**
- * Make specified players thirdperson
- * @param {array} players CTFPlayer instance or array of them
- */
-function MakeTP(players = null) {
-	// use activator when no argument
-	if (players == null && activator != null && activator instanceof CTFPlayer) {
-		players = activator;
-	}
-
-	// type check
-	if (players instanceof CTFPlayer) {
-		players = [players];
-	} else if (typeof players != "array") {
-		error(__FILE__ + " -- MakeTP - Incorrect object type provided. Must be player or array\n");
-		return;
-	}
-
-	foreach(player in players) {
-		if (player != null && player.IsValid() && player instanceof CTFPlayer) {
-			if (NetProps.GetPropInt(player, "m_nForceTauntCam")) {
-				if (thirdperson.players_in_tp.find(player) == null) {
-					thirdperson.players_to_ignore.append(player);
-				}
-			} else {
-				thirdperson.players_in_tp.append(player);
-				EntFireByHandle(player, "SetForcedTauntCam", "1", -1, player, player);
-			}
+		// make them thirdperson
+		else {
+			this.in_thirdperson = true;
+			this.AcceptInput("SetForcedTauntCam", "1", null, null);
 		}
-	}
-}
+	};
 
-/**
- * Make specified players firstperson
- * @param {array} players CTFPlayer instance or array of them
- */
-function ReturnToFP(players = null) {
-	// use activator when no argument
-	if (players == null && activator != null && activator instanceof CTFPlayer) {
-		players = activator;
-	}
-
-	// type check
-	if (players instanceof CTFPlayer) {
-		players = [players]
-	} else if (typeof players != "array") {
-		error(__FILE__ + " -- ReturnToFP - Incorrect object type provided. Must be player or array\n");
-		return;
-	}
-
-	foreach(player in players) {
-		if (player != null && player.IsValid() && player instanceof CTFPlayer) {
-
-			// remove tp
-			local index = thirdperson.players_in_tp.find(player);
-			if (index != null && NetProps.GetPropInt(activator, "m_nForceTauntCam")) {
-				EntFireByHandle(player, "SetForcedTauntCam", "0", -1, player, player);
-				thirdperson.players_in_tp.remove(index);
-			}
-
-			// remove from ignore list
-			index = thirdperson.players_to_ignore.find(player);
-			if (index != null) {
-				thirdperson.players_to_ignore.remove(index);
-			}
+	/**
+	 * Put the player into first person.
+	 * Will only affect players that were previously put into thirdperson by the script.
+	 */
+	CTFPlayer.MakeFirstPerson <- function() {
+		// player was put in thirdperson by the script and is still in thirdperson perspective
+		if (this.in_thirdperson && NetProps.GetPropInt(this, "m_nForceTauntCam")) {
+			this.in_thirdperson = false;
+			this.AcceptInput("SetForcedTauntCam", "0", null, null);
 		}
-	}
+		this.ignore_thirdperson = null;
+	};
 }
+
+
+// if (!("SetThirdPerson" in CTFPlayer)) {
+// 	// global options for the mapper
+// 	getroottable().thirdperson <- {
+// 		firstperson_on_round_restart = true // return players to first person post round restart
+// 	};
+
+// 	CTFPlayer.put_in_thirdperson <- null;
+
+// 	/**
+// 	 * Put player into thirdperson.
+// 	 * If a player was put into thirdperson by external means when this is called,
+// 	 * the player will be marked to be ignored by future perspective changes from the script.
+// 	 */
+// 	CTFPlayer.ThirdPerson <- function() {
+// 		if (NetProps.GetPropInt(this, "m_nForceTauntCam") == 1 && this.put_in_thirdperson == false) {
+// 			return;
+// 		} else {
+// 			this.put_in_thirdperson = true;
+// 			this.AcceptInput("SetForcedTauntCam", "1", null, null);
+// 		}
+// 	};
+
+// 	/**
+// 	 * Put the player into first person.
+// 	 * Will only affect players that were previously put into thirdperson by the script.
+// 	 */
+// 	CTFPlayer.FirstPerson <- function() {
+// 		if (this.put_in_thirdperson) {
+// 			this.put_in_thirdperson = false;
+// 			this.AcceptInput("SetForcedTauntCam", "0", null, null);
+// 		}
+// 	};
+// }
+
+if (thirdperson.firstperson_on_round_restart) {
+	EntFire("player", "RunScriptCode", "self.SetFirstPerson()", -1);
+}
+
 
 // Notes
 // --------------------------------------------------------------------------------------------------------------
