@@ -1,10 +1,45 @@
 /*
 	A work-in-progress Dodgeball script by worMatty
-	Version 0.1 I guess, until it's used in something
+	Version 0.1.1
+
+	Usage:
+		1. Add to a logic_script. It will also serve as your rocket spawn point.
+		2. Send the entity RunScriptCode input with the following parameter:
+				StartGame()
+			A game will start, players will be changed to pyro, they will be given an appropriate flamethrower if
+			they do not have one equipped, and it will be modified so it does not consume ammo.
+			Their other weapons will be deleted.
+
+			You can optionally provide game settings in a table in this function call like so:
+				StartGame({ change_to_pyro = false, delay_before_rockets_start = 5.0 })
+			See the game_defaults table for default settings. DO NOT modify the script to change these.
+
+			The game will end when one team has no live players.
+			You can manually stop a game by sending the input CallScriptFunction with the parameter StopGame.
+
+	Extra:
+		point_template entities added to the logic_script's EntityGroup fields will have their templates
+		spawned when a Dodgeball game starts. The spawned entities will be killed when the game stops.
+
+		You can customise the sounds by adding game sound overrides in a custom soundscript.
+		Scroll down to the sound table to read how.
+
+		The script can be used standalone in a map. If it has a db_ prefix, the script will attempt to
+		change the tf_arena_use_queue console variable to false so everyone can play.
+
+		You can change the number of rockets mid-game by sending the input:
+			RunScriptCode > game_settings.number_of_rockets = 2
+
 */
 
 /*
 	Changelog
+		Version 0.1.1
+			* Added a game setting to control number of rockets
+			* Made game_settings table global so it's accessible using inputs
+			* Fixed an issue where if the player's primary weapon was a wearable, they would not receive a flamethrower
+			* Players are taken out of taunt prior to switching to their flamethrower to prevent them T-posing when the taunt ends
+		Version 0.1
 		Changes from Gamer_X's version
 			* Rockets are now independent, enabling the possibility of having more than one in play
 			* Think frequency is increased to per-frame, which should make rocket motion smoother
@@ -119,19 +154,24 @@
 
 IncludeScript("matty/stocks2.nut");
 
+::MAX_WEAPONS <- 8;	// used by ProcessWeapons
+
 local game_active = false;
-local game_settings = {};
-local point_templates = [];
-local rockets = [];
+game_settings <- {}; // settings for currently active game
+local point_templates = []; // point_templates found in the logic_script's EntityGroup fields
+local rockets = []; // array where all spawned rockets are stored, even arbitrarily-spawned rockets
 local last_time_with_rockets = 0;
 
-// you can supply these in the RunScriptCode StartGame function call
+// Default game settings.
+// You can change these when calling StartGame via RunScriptCode, by adding them to a table in the first argument.
+// It is best NOT to modify this script, and instead supply your preferences via I/O.
 local game_defaults = {
-	change_to_pyro = false // all players are changed to pyro class
+	change_to_pyro = true // all players are changed to pyro class
 	delete_other_weapons = true // delete any non-primary weapons in player slots
-	wait_time = 3.0 // seconds before spawning the next rocket when there are none
+	wait_time = 3.0 // seconds to wait before spawning the next rocket
 	delay_before_rockets_start = 0.0 // delay before rockets begin to fire. useful in preparing player loadout before the game begins
 	stop_when_team_dead = true // automatically stop the game when the round is not active or one team has no live players
+	number_of_rockets = 1 // number of rockets in play. you can change this during a game
 
 	// testing
 	solo_mode = false // rockets change teams one second after deflection
@@ -214,10 +254,10 @@ function OnPostSpawn() {
 			local scope = ent.GetScriptScope();
 
 			scope.spawned_targetnames <- {};
-			scope.PreSpawnInstance <-  function(classname, targetname) {};
+			scope.PreSpawnInstance <- function(classname, targetname) {};
 
 			// add targetnames of spawned entities to internal list
-			scope.PostSpawn <-  function(entities) {
+			scope.PostSpawn <- function(entities) {
 				foreach(targetname, value in entities) {
 					if (developer()) printl(__FILE__ + " -- Spawned " + targetname);
 					spawned_targetnames[targetname] <- value;
@@ -225,7 +265,7 @@ function OnPostSpawn() {
 			};
 
 			// kill spawned targetnames
-			scope.Cleanup <-  function() {
+			scope.Cleanup <- function() {
 				foreach(targetname, ent in spawned_targetnames) {
 					if (developer()) printl(__FILE__ + " -- Killing " + targetname);
 					EntFire(targetname, "kill");
@@ -365,7 +405,7 @@ function StartGame(options = null) {
 			if (options.change_to_pyro) {
 				ChangePlayerClass(player, TF_CLASS_PYRO);
 			} else {
-				ProcessWeapons(player, options.delete_other_weapons);
+				ProcessWeapons(player, options.delete_other_weapons); // SpookyToad says players that go through this may not receive a flamethrower and will T-pose
 			}
 		}
 		// player is already a pyro
@@ -393,9 +433,9 @@ function StartGame(options = null) {
 
 	// start the think function, optionally after a delay
 	if (options.delay_before_rockets_start > 0.0) {
-		EntFireByHandle(self, "RunScriptCode", "AddThinkToEnt(self, `Think`)", options.delay_before_rockets_start, null, null);
+		EntFireByHandle(self, "RunScriptCode", "AddThinkToEnt(self, `GameThink`)", options.delay_before_rockets_start, null, null);
 	} else {
-		AddThinkToEnt(self, "Think");
+		AddThinkToEnt(self, "GameThink");
 	}
 }
 
@@ -434,8 +474,18 @@ function StopGame() {
  * @param {bool} delete_other_weapons True to delete all other weapons the player holds
  */
 function ProcessWeapons(player, delete_other_weapons) {
-	// get primary weapon
-	local primary_weapon = NetProps.GetPropEntityArray(player, "m_hMyWeapons", 0);
+	local primary_weapon = null;
+
+	// iterate weapons and retrieve primary
+	for (local i = 0; i < MAX_WEAPONS; i++) {
+		local weapon = NetProps.GetPropEntityArray(player, "m_hMyWeapons", i)
+
+		if (weapon != null && weapon.GetSlot() == 0) {
+			primary_weapon = weapon;
+			break;
+		}
+	}
+
 	local GetWeaponIDI = function(weapon) {
 		return NetProps.GetPropInt(weapon, "m_AttributeManager.m_Item.m_iItemDefinitionIndex");
 	};
@@ -456,13 +506,15 @@ function ProcessWeapons(player, delete_other_weapons) {
 	NetProps.SetPropIntArray(player, "m_iAmmo", 200, 1);
 
 	// switch player to weapon
+	player.RemoveCond(TF_COND_TAUNTING); // taunting players will not be switched
 	player.Weapon_Switch(primary_weapon);
 
 	// remove other weapons
 	if (delete_other_weapons) {
-		for (local i = 6; i > 0; i--) {
+		for (local i = 0; i < MAX_WEAPONS; i++) {
 			local weapon = NetProps.GetPropEntityArray(player, "m_hMyWeapons", i);
-			if (weapon != null && weapon.IsValid()) {
+
+			if (weapon != null && weapon.IsValid() && weapon != primary_weapon) {
 				weapon.Destroy();
 			}
 		}
@@ -472,7 +524,7 @@ function ProcessWeapons(player, delete_other_weapons) {
 /**
  * Game think
  */
-function Think() {
+function GameThink() {
 	if (!game_active) {
 		return;
 	}
@@ -489,7 +541,8 @@ function Think() {
 	});
 
 	// spawn rockets
-	if (rockets.len() == 0) {
+	// if (rockets.len() == 0) {
+	if (rockets.len() < game_settings.number_of_rockets) {
 		if ((Time() - last_time_with_rockets) > game_settings.wait_time || last_time_with_rockets == 0) {
 
 			// determine team
@@ -594,6 +647,7 @@ function SpawnRocket(team, params = null) {
 		speed = params.initial_speed
 		turn_rate = params.turn_rate
 		last_deflected = Time()
+		game_settings = game_settings
 
 		// methods
 		GetOpposingTeam = GetOpposingTeam
@@ -650,7 +704,7 @@ function SpawnRocket(team, params = null) {
 	 * @param {int} target_team Target team index
 	 * @param {string} type Type of target acquisition method: closest, random, fair
 	 */
-	scope.AcquireTarget <-  function(target_team, type) {
+	scope.AcquireTarget <- function(target_team, type) {
 		local new_target = null;
 
 		// get live opposing players
@@ -727,7 +781,7 @@ function SpawnRocket(team, params = null) {
 	};
 
 	// target acquired sounds
-	scope.TargetSounds <-  function(targeted_player) {
+	scope.TargetSounds <- function(targeted_player) {
 		local players = GetPlayers();
 		foreach(player in players) {
 			// for target
@@ -750,7 +804,7 @@ function SpawnRocket(team, params = null) {
 	/**
 	 * Calculate the rocket's movement
 	 */
-	scope.MoveThink <-  function() {
+	scope.MoveThink <- function() {
 		local velocity = null;
 
 		if (target.IsValid()) {
@@ -804,7 +858,7 @@ function SpawnRocket(team, params = null) {
 	/**
 	 * Rocket think function
 	 */
-	scope.Think <-  function() {
+	scope.Think <- function() {
 		// airblasted (owning team is the same as target team)
 		if (target_team == self.GetTeam()) {
 			// record deflection
@@ -977,7 +1031,7 @@ function BounceRocket(pitch, yaw, roll) {
  * @return {bool} True if the round state is 'running' or 'stalemate'
  */
 function IsRoundActive() {
-	return (GetRoundState() == GR_STATE_RND_RUNNING || GetRoundState() == GR_STATE_STALEMATE);
+	return (GetRoundState() == GR_STATE_RND_RUNNING || GetRoundState() == GR_STATE_STALEMATE); // TODO: Check if game mode is arena when checking if stalemate
 }
 
 /**
@@ -1011,10 +1065,12 @@ function ChangePlayerClass(player, tfclass) {
 	player.Teleport(true, pos, true, ang, true, vel);
 	NetProps.SetPropInt(player, "m_Shared.m_iDesiredPlayerClass", desired_class);
 }
+// TODO: Check that this function can be called by EntFire when changing class on game start or post-inventory application
+// Consider adding to stocks2
 
 /**
- * Give a player a weapon
- * Deletes the old weapon in the slot.
+ * Give a player a weapon, replacing the weapon in the same equip slot.
+ * The old weapon is destroyed.
  * Note: The function contains a constant for the maximum number of weapons.
  * @param {instance} player Player handle
  * @param {string} classname Classname of weapon to give
@@ -1022,30 +1078,34 @@ function ChangePlayerClass(player, tfclass) {
  * @return {instance} Handle of weapon entity
  */
 function GivePlayerWeapon(player, classname, item_def_index) {
-	local weapon = Entities.CreateByClassname(classname);
+	local new_weapon = Entities.CreateByClassname(classname);
 
-	NetProps.SetPropInt(weapon, "m_AttributeManager.m_Item.m_iItemDefinitionIndex", item_def_index);
-	NetProps.SetPropBool(weapon, "m_AttributeManager.m_Item.m_bInitialized", true);
-	NetProps.SetPropBool(weapon, "m_bValidatedAttachedEntity", true);
-	weapon.SetTeam(player.GetTeam());
+	NetProps.SetPropInt(new_weapon, "m_AttributeManager.m_Item.m_iItemDefinitionIndex", item_def_index);
+	NetProps.SetPropBool(new_weapon, "m_AttributeManager.m_Item.m_bInitialized", true);
+	NetProps.SetPropBool(new_weapon, "m_bValidatedAttachedEntity", true);
+	new_weapon.SetTeam(player.GetTeam());
 
-	Entities.DispatchSpawn(weapon);
+	Entities.DispatchSpawn(new_weapon);
 
-	// remove existing weapon in same slot
+	// replace existing weapon in same equip slot
 	for (local i = 0; i < 8; i++) {
-		local heldWeapon = NetProps.GetPropEntityArray(player, "m_hMyWeapons", i);
-		if (heldWeapon == null)
+		local weapon = NetProps.GetPropEntityArray(player, "m_hMyWeapons", i);
+
+		// no weapon found, or weapon does not occupy the same equip slot
+		if (weapon == null || weapon.GetSlot() != new_weapon.GetSlot()) {
 			continue;
-		if (heldWeapon.GetSlot() != weapon.GetSlot())
-			continue;
-		heldWeapon.Destroy();
+		}
+
+		// destroy the old weapon and erase it from the player's weapons array
+		weapon.Destroy();
 		NetProps.SetPropEntityArray(player, "m_hMyWeapons", null, i);
 		break;
 	}
 
-	player.Weapon_Equip(weapon);
+	// equip the new weapon to the player, which also adds it to the array
+	player.Weapon_Equip(new_weapon);
 
-	return weapon;
+	return new_weapon;
 }
 
 // Notes
