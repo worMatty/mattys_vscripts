@@ -1,5 +1,5 @@
 /*
-    Personal Music v0.2
+    Personal Music v0.2.1
 	By worMatty
 
 	Play a music track to a client.
@@ -26,7 +26,14 @@
 		before anyone has joined the server.
 		Alternatively, since you are using a soundscript, try prepending an asterisk
 		(the `*` character) to the wave filepath. This should cause the game to stream the
-		audio file instead of caching it. I have not tested this. 
+		audio file instead of caching it. I have not tested this.
+*/
+
+/*
+	Changelog
+		v0.2.1
+		* Set current track to null when stopping.
+			This fixes an issue where it was not possible to play the same track again after stopping it.
 */
 
 /*
@@ -70,6 +77,7 @@ function StopMusic(player = null) {
 	local current_track = GetPlayerCurrentTrack(player);
 	if (current_track != null) {
 		StopSoundOn(current_track, player);
+		SetPlayerCurrentTrack(player, null);
 	}
 }
 
