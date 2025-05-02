@@ -1,38 +1,70 @@
-/**
- * sky_camera Switcher v0.1
- * Switch to different skyboxes
- * Based on a script by gidi30
- */
-
 /*
+	sky_camera Switcher v0.1.1 by worMatty
+	Switch players to different 3D skyboxes
+	Based on a script by gidi30
+
 	Usage
 
-	1. Add the script to a logic_script
-	2. Give each sky_camera a unique targetname by disabling SmartEdit and adding a keyvalue pair
+		Add the script to a logic_script entity. It does not need to have a targetname.
+
+		Give each sky_camera a unique targetname.
+		You can do this by disabling SmartEdit and adding a keyvalue pair like so:
 			key: targetname		value: skycam_01
-	3. In EntityGroup[0], add the targetname of the default sky_camera
-	4. To set an activating player's skybox, send the sky_camera this input:
+
+		In the logic_script's first EntityGroup field, add the targetname of the default sky_camera.
+		This will be the first sky_camera active when the map starts.
+		This is necessary because TF2 makes the last sky_camera spawned the active camera,
+		and the order they spawn may be different to what you want.
+
+		To set a player's sky camera when they start an I/O chain (e.g. by touching a trigger),
+		send one of these inputs to the sky_camera entity itself:
+
 			CallScriptFunction > UseSkybox
-	5. To set the skybox for all players, send a sky_camera this input:
+			RunScriptCode > UseSkybox(activator)
+
+		To make a sky_camera the active one for all players, send it this input:
+
 			CallScriptFunction > ActivateSkybox
-		This will also make this sky_camera the active camera for new players
+
+		This will also make this sky_camera the active one for new players who join the server.
+
+		Note: sky_cameras are 'preserved entities'. They are not deleted and respawned when the
+		round restarts. If you set a sky_camera as active, it will remain active for the rest of
+		the map session. If you want a different camera to be active on the next round, you
+		must call ActiveSkybox on it on round restart. The simplest method is a logic_relay
+		with an OnSpawn output.
 
 	Extra functions
 
-	UseSkybox can take a player instance as its argument
-		RunScriptCode > UseSkybox(player)
+		You can set a sky_camera as the default for new players without making it active for
+		existing players by sending it this input:
 
-	You can manually set a sky_camera as the active camera for new players without
-	switching any players to the sky_camera
-		CallScriptFunction > SetAsActive
-	This could be useful if you have been gradually switching individual players to a different
-	camera and wish to set a new default camera once most of them have transitioned.
+			CallScriptFunction > SetAsActive
+
+		This could be useful if you have been gradually switching individual players to a different
+		camera and wish to set a new default camera once most of them have transitioned.
+*/
+
+/*
+	Changelog
+		Version 0.1.1
+		* Check if EntityGroup[0] is not null when setting first camera
+		* Added the improved event hooking code from the VDC Wiki
+*/
+
+/*
+	Possible issues
+		* sky_cameras created after the round starts will not have the functions this script adds.
+			Calling GetActiveSkybox() or UseSkybox() will fail in this case.
+			A probable workaround is to call this script's Precache function manually after
+			the new sky_cameras have spawned. Note that new cameras will receive these
+			functions on round restart anyway.
 */
 
 function Precache() {
-	// set first camera if specified
+	// get the first camera from EntityGroup[0]
 	local first_camera = null;
-	if ("EntityGroup" in self.GetScriptScope()) {
+	if ("EntityGroup" in self.GetScriptScope() && EntityGroup[0] != null) {
 		first_camera = EntityGroup[0];
 	}
 
@@ -42,7 +74,7 @@ function Precache() {
 		camera.ValidateScriptScope();
 		local scope = camera.GetScriptScope();
 
-		// exit if already done
+		// exit if already done (sky_cameras are preserved ents)
 		if ("UseSkybox" in camera.GetScriptScope()) {
 			break;
 		}
@@ -54,7 +86,7 @@ function Precache() {
 		 * Makes a sky_camera the active one for the specified player
 		 * @param {instance} player Player instance. Defaults to activator
 		 */
-		scope.UseSkybox <-  function(player = null) {
+		scope.UseSkybox <- function(player = null) {
 			if (player == null) {
 				if (activator != null) {
 					player = activator;
@@ -81,7 +113,7 @@ function Precache() {
 		 * Set the active skybox for all players
 		 * Also sets the camera as the default for any connecting clients
 		 */
-		scope.ActivateSkybox <-  function() {
+		scope.ActivateSkybox <- function() {
 			SetAsActive();
 			local maxclients = MaxClients().tointeger();
 
@@ -102,9 +134,6 @@ function Precache() {
 			last_activated <- Time();
 		}
 	}
-
-	// hook new joiners
-	__CollectGameEventCallbacks(self.GetScriptScope());
 }
 
 /**
@@ -121,6 +150,7 @@ function GetActiveSkybox() {
 			continue;
 		}
 
+		// todo: sky_cameras created after the round starts will not have this property
 		if (camera.GetScriptScope().last_activated > active.GetScriptScope().last_activated) {
 			active = camera;
 		}
@@ -129,11 +159,36 @@ function GetActiveSkybox() {
 	return active;
 }
 
-// hook new joiners and give them the currently active camera
-function OnGameEvent_player_activate(params) {
-	local player = GetPlayerFromUserID(params.userid);
-	EntFireByHandle(self, "RunScriptCode", "GetActiveSkybox().GetScriptScope().UseSkybox(activator)", 1.0, player, null);
+
+// Event Hooks
+// --------------------------------------------------------------------------------
+
+local EventsID = UniqueString();
+
+getroottable()[EventsID] <- {
+
+	// hook new joiners and give them the currently active camera
+	function OnGameEvent_player_activate(params) {
+		local player = GetPlayerFromUserID(params.userid);
+		EntFireByHandle(self, "RunScriptCode", "GetActiveSkybox().GetScriptScope().UseSkybox(activator)", 1.0, player, null);
+	}
+
+	// cleanup events on round restart
+	OnGameEvent_scorestats_accumulated_update = function(_) {
+		delete getroottable()[EventsID];
+	}
 }
+
+local EventsTable = getroottable()[EventsID];
+
+foreach(name, callback in EventsTable) {
+	EventsTable[name] = callback.bindenv(this)
+	__CollectGameEventCallbacks(EventsTable)
+}
+
+
+// Notes
+// --------------------------------------------------------------------------------
 
 /*
 	Findings
