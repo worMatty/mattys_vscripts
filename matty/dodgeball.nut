@@ -34,6 +34,8 @@
 
 /*
 	Changelog
+		Version 0.1.2
+			* Added a setting to control blue health scaling, intended for use in deathrun maps with a single blue player. Off by default
 		Version 0.1.1
 			* Added a game setting to control number of rockets
 			* Made game_settings table global so it's accessible using inputs
@@ -152,9 +154,19 @@
 		the SourceMod plugins do. Probably took a lot of trial and error.
 */
 
+/*
+	Known issues
+
+	* Some servers prevent airblasting using a server-side plugin, presumably detecting the attempt and cancelling it
+	* We should also ensure servers that mess with airblasting using attributes can't interfere with the game
+	* Players who are respawned during a game will be given the correct loadout but a server weapon restriction plugin may interfere.
+		This has not been tested. It is best only to start a game when players have been alive for a few frames.
+		If this functionality is required I can look into it but it's highly dependent on the server setup.
+*/
+
 IncludeScript("matty/stocks2.nut");
 
-::MAX_WEAPONS <- 8;	// used by ProcessWeapons
+::MAX_WEAPONS <- 8; // used by ProcessWeapons
 
 local game_active = false;
 game_settings <- {}; // settings for currently active game
@@ -172,6 +184,7 @@ local game_defaults = {
 	delay_before_rockets_start = 0.0 // delay before rockets begin to fire. useful in preparing player loadout before the game begins
 	stop_when_team_dead = true // automatically stop the game when the round is not active or one team has no live players
 	number_of_rockets = 1 // number of rockets in play. you can change this during a game
+	scale_blue_health = false // scale blue health based on number of live reds. intended for use in deathrun maps with a single blue player!
 
 	// testing
 	solo_mode = false // rockets change teams one second after deflection
@@ -415,19 +428,22 @@ function StartGame(options = null) {
 	}
 
 	// grant extra health to blue players if they face off multiple of five reds
-	// TODO: Check if this works for players who are respawned
-	local reds_len = LiveReds().len();
-	local blues = LiveBlues();
-	// reds_len = reds_len / blues.len(); // ratio for multiple activators
-	local health_mult = (reds_len / 5).tointeger();
+	// note: designed for single blue player only
+	// TODO: Check if this works for players who are respawned and disable it by default
+	if (game_settings.scale_blue_health == true) {
+		local reds_len = LiveReds().len();
+		local blues = LiveBlues();
+		// reds_len = reds_len / blues.len(); // ratio for multiple activators
+		local health_mult = (reds_len / 5).tointeger();
 
-	if (health_mult > 0) {
-		foreach(blue in blues) {
-			local extra_hp = (rocket_defaults.damage * health_mult);
-			blue.AddCustomAttribute("max health additive bonus", extra_hp.tointeger(), -1);
-			// EntFireByHandle(blue, "RunScriptCode", "self.SetHealth(self.GetHealth())", 0, null, null);
-			blue.SetHealth(blue.GetMaxHealth());
-			ChatMsg(null, blue.CName() + " health scaled to " + blue.GetMaxHealth());
+		if (health_mult > 0) {
+			foreach(blue in blues) {
+				local extra_hp = (rocket_defaults.damage * health_mult);
+				blue.AddCustomAttribute("max health additive bonus", extra_hp.tointeger(), -1);
+				// EntFireByHandle(blue, "RunScriptCode", "self.SetHealth(self.GetHealth())", 0, null, null);
+				blue.SetHealth(blue.GetMaxHealth());
+				ChatMsg(null, blue.CName() + " health scaled to " + blue.GetMaxHealth());
+			}
 		}
 	}
 
