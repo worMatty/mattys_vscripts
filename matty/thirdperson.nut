@@ -3,8 +3,9 @@
 	By worMatty
 
 	Put players into thirdperson and back into firstperson.
-	Very useful for minigames where the player benefits from seeing themselves, such as spinners,
-	platforming, or when the player is affected by something such as a loss of control effect.
+	Very useful for minigames in which the player needs to see themselves better, such as spinners,
+	falling platforms, laser dodging, or when the player is under an effect and their outward
+	appearance communicates that fact. e.g. Reduced in size, on fire, emitting poison gas.
 
 	If a player has had their perspective changed via external means, such as a server plugin,
 	the script will not change it, out of respect for their preference.
@@ -12,29 +13,46 @@
 	Usage:
 		Add the script to a logic_script.
 
-		If you want to put players in and out of thirdperson while inside a trigger,
-		add the following outputs to it:
-			OnStartTouch > !activator > RunScriptCode > self.SetThirdPerson()
-			OnEndTouch > !activator > RunScriptCode > self.SetFirstPerson()
+		If you want to put players into thirdperson while inside a trigger, and have them return to
+		firstperson when they leave it, give it the following outputs:
+			OnStartTouch > !activator > RunScriptCode > self.MakeThirdPerson()
+			OnEndTouch > !activator > RunScriptCode > self.MakeFirstPerson()
 
-		If you want to put all players into and out of thirdperson using logic, do this:
-			OnWhatever > player > RunScriptCode > self.SetThirdPerson()
-			OnWhatever > player > RunScriptCode > self.SetFirstPerson()
+		To put *all* players into thirdperson or firstperson using I/O, do this:
+			OnWhatever > player > RunScriptCode > self.MakeThirdPerson()
+			OnWhatever > player > RunScriptCode > self.MakeFirstPerson()
 
-		If you only want to put live red players into and out of thirdperson, do this:
+		If you only want to put live red players into thirdperson or firstperson, do this:
 			OnWhatever > player > RunScriptCode >
-			if (self.IsAlive() && self.GetTeam == Constants.ETFTeam.TF_TEAM_RED) self.SetThirdPerson()
+			if (self.IsAlive() && self.GetTeam == Constants.ETFTeam.TF_TEAM_RED) self.MakeThirdPerson()
+			OnWhatever > player > RunScriptCode >
+			if (self.IsAlive() && self.GetTeam == Constants.ETFTeam.TF_TEAM_RED) self.MakeFirstPerson()
 
-		Players will be returned to firstperson on round restart.
-		If you do not want this to happen, send the following input to any entity, including this one:
+		Players will automatically be returned to firstperson on round restart.
+		If you do not want this to happen, send the following input to *any* entity, including this one:
 			OnWhatever > worldspawn > RunScriptCode > thirdperson.firstperson_on_round_restart = false
+		This setting is global, so it persists across rounds within the map session.
+
+		Tip: The reason why you can send this input to any entity is because the variable is in
+		'global scope', or 'root scope'. It is accessible from anywhere. This is necessary because
+		variables in 'script scope', belonging to the entity the script has been added to,
+		are deleted when the entity is deleted.
+
+		Tip: MakeThirdPerson and MakeFirstPerson are functions attached to players, or 'methods' of the
+		'CTFPlayer' class. Players have many such built-in methods enabling scripters to do and check things.
+		Since this script attaches the perpsective setting functionality to the *player*, and not the
+		script's entity, it enables you to target the player who triggered the I/O chain, the '!activator'.
 */
 
 /*
 	Changelog
+		2.3.1
+			Updated documentation to reflect the new function names.
+			Improved instructions and added useful tidbits of information for those interested in
+			understanding more about scripting.
 		2.3
 			Changed how the script works.
-			It now adds two functions to CTFPlayer, SetThirdPerson() and SetFirstPerson().
+			It now adds two functions to CTFPlayer, MakeThirdPerson() and MakeFirstPerson().
 			Properties that track if the player is in thirdperson or should be ignored are stored on the player.
 			Players are still put back in firstperson on round restart but this is now able to be disabled.
 			The mapper can set thirdperson.firstperson_on_round_restart to false.
