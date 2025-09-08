@@ -1,6 +1,7 @@
 /*
-	A work-in-progress Dodgeball script by worMatty
-	Version 0.1.1
+	A Dodgeball script by worMatty
+	Version 0.1.1, in beta
+	Fully functional just needs some polishing and improving
 
 	Usage:
 		1. Add to a logic_script. It will also serve as your rocket spawn point.

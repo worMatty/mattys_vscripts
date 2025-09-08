@@ -1,6 +1,5 @@
-
 /**
- * No fall damage v0.1 by worMatty
+ * No fall damage v0.2 by worMatty
  *
  * Adds the `cancel falling damage` attribute to players after they spawn.
  * This disables fall damage globally.
@@ -29,18 +28,34 @@
  * which would break collision detection for other triggers. Instead, use this script.
  */
 
-// If this is the only VScript you're using, uncomment the below line
-// ClearGameEventCallbacks();
+/*	Changelog
+	0.2	Better event cleanup
+*/
 
 function OnPostSpawn() {
-    __CollectGameEventCallbacks(self.GetScriptScope());
-    EntFire("player", "RunScriptCode", "self.AddCustomAttribute(`cancel falling damage`, 1.0, -1)");
+	EntFire("player", "RunScriptCode", "self.AddCustomAttribute(`cancel falling damage`, 1.0, -1)");
 }
 
-function OnGameEvent_player_spawn(data) {
-	local player = GetPlayerFromUserID(data.userid);
+local EventsID = UniqueString();
 
-	if (player != null) {
-		EntFireByHandle(player, "RunScriptCode", "self.AddCustomAttribute(`cancel falling damage`, 1.0, -1)", -1, player, player);
+getroottable()[EventsID] <- {
+	/** Add the fall damage cancelling attribute post spawn */
+	function OnGameEvent_post_inventory_application(params) {
+		local player = GetPlayerFromUserID(params.userid);
+		if (player != null && player.IsValid()) {
+			EntFireByHandle(player, "RunScriptCode", "self.AddCustomAttribute(`cancel falling damage`, 1.0, -1)", -1, player, player);
+		}
 	}
+
+	// clean up event hooks before round restarts
+	OnGameEvent_scorestats_accumulated_update = function(_) {
+		delete getroottable()[EventsID];
+	}
+}
+
+local EventsTable = getroottable()[EventsID];
+
+foreach(name, callback in EventsTable) {
+	EventsTable[name] = callback.bindenv(this)
+	__CollectGameEventCallbacks(EventsTable)
 }

@@ -1,5 +1,5 @@
 /*
-	Matty's Stocks 2.1.1
+	Matty's Stocks 2.1.2 WIP
 
 	* Folds all native constants into root scope
 	* Adds several new useful constants
@@ -21,7 +21,6 @@
 	* Wrapper functions GetReds, GetBlues, LiveReds, LiveBlues, DeadReds, DeadBlues
 
 	CTFPlayer methods
-	* IsAlive
 	* Die
 	* Fizzle
 	* IsObserver
@@ -31,7 +30,7 @@
 	* UserId
 
 	Messaging
-	* ChatMsg - Easily print chat messages to players using a variety of targetting methods
+	* ChatMsg - Easily print chat messages to players using a variety of targeting methods
 	* ChatColor - Get a chat colour string for a player or team, or specify your own RGB or RGBA value
 	* CenterMsg - Print a message to the 'centre say' area using the targetting system of ChatMsg
 	* Annot - Print training annotations to targetted clients
@@ -41,12 +40,18 @@
 	* CleanGameEventCallbacks - Delete invalid game events instead of deleting all of them
 
 	Thanks ficool2 and Joshie for all you've done for us!
-	Changelog and more info is at the bottom of the doc.
 */
 
 /*
 	Changelog
 
+	2.1.2 WIP
+		* Replaced function parameter default arguments that were empty tables, with 'null', to avoid stale data
+		* Deleted CTFPlayer.IsAlive() as it exists natively now
+		* TeleportStuff - Grid spacing is now off by default
+		* Removed unneeded 'source entity instance' parameter from PlaySound
+		* TeleportStuff: Return value when source or destination entities were not found is now 0 instead of null
+		* Added an alternative function name for RandomiseArray: ShuffleArray
 	2.1.1
 		* Fixed ChatMsg not finding colour codes (\x01 etc.) in supplied message argument
 		* Fixed GetPlayers targetname search referencing a non-existent variable
@@ -56,20 +61,29 @@
 		* Removed ClearGameEventCallbacks()
 */
 
+/*
+	Work-in-progress
+	PlaySound added, replacing PPlay. It's easier to use.
+	PlayAmbient added, replacing PPlay used with the global filter flag. Adds sounds to the loop list.
+	SetDestroyCallback added
+	Looping sounds emitted from edicts will be stopped when the entity is destroyed, using an OnDestroy callback
+	See if it's possible to create a class inherited from 'array' to replace Players(), or see about adding filtering methods to arrays.
+*/
+
 /**
  * Events
  * ----------------------------------------------------------------------------------------------------
  */
 
 /**
- * Stop looping ambient sounds just before round restart
- * Used by PPlay
+ * Stop looping sounds just before round restart
  */
 function OnGameEvent_scorestats_accumulated_update(params) {
 	local soundlist = ::matty.sounds;
-	// printl(__FILE__ + " -- Stopping " + soundlist.len() + " sounds");
+
 	foreach(sound in soundlist) {
 		sound.flags <- SND_STOP;
+		sound.filter_type <- RECIPIENT_FILTER_GLOBAL;
 		EmitSoundEx(sound);
 	};
 	soundlist = [];
@@ -150,6 +164,19 @@ constants <- {
 	SND_IGNORE_NAME = 512
 	SND_DO_NOT_OVERWRITE_EXISTING_ON_CHANNEL = 1024
 
+	// EmitSoundEx channels
+	CHAN_REPLACE = -1
+	CHAN_AUTO = 0
+	CHAN_WEAPON = 1
+	CHAN_VOICE = 2
+	CHAN_ITEM = 3
+	CHAN_BODY = 4
+	CHAN_STREAM = 5
+	CHAN_STATIC = 6
+	CHAN_VOICE2 = 7
+	CHAN_VOICE_BASE = 8
+	CHAN_USER_BASE = 136
+
 	// Chat colour hexadecimal values
 	CHAT_COLOR_SPEC = 0xCCCCCC
 	CHAT_COLOR_RED = 0xFF3F3F
@@ -181,7 +208,7 @@ foreach(key, value in constants) {
  * @deprecated Doesn't work. Entities can't be fizzled this way
  * @param {integer} effect TF_DMG_CUSTOM damage type
  */
-::CBaseEntity.Fizzle <-  function(effect = TF_DMG_CUSTOM_PLASMA) {
+::CBaseEntity.Fizzle <- function(effect = TF_DMG_CUSTOM_PLASMA) {
 	this.TakeDamageCustom(null, this, null, Vector(0, 0, 0), this.GetOrigin(), this.GetHealth(), 0, effect);
 
 	// self-damage is being neutralised by something
@@ -201,7 +228,7 @@ foreach(key, value in constants) {
  * @param {string} timer_name Targetname of the team_round_timer
  * @return {table} Table of minutes and seconds, or null if timer not found
  */
-::GetRoundTimeElapsed <-  function(timer_name) {
+::GetRoundTimeElapsed <- function(timer_name) {
 	local timer = Entities.FindByName(null, timer_name);
 
 	if (timer != null) {
@@ -227,7 +254,7 @@ foreach(key, value in constants) {
  * @param {vector} origin2 Second origin
  * @param {float} radius The radius to check within
  */
-::RadiusCheck <-  function(origin1, origin2, radius) {
+::RadiusCheck <- function(origin1, origin2, radius) {
 	radius = radius * radius;
 	local distance = (origin1 - origin2).LengthSqr();
 	return (distance <= radius)
@@ -236,23 +263,24 @@ foreach(key, value in constants) {
 /**
  * Teleport one or more entities to one or more destination entities.
  * If using a target or classname, it will find all instances.
- * If using a team number, dead players will be filtered out of the final results if respawn == false.
- * Grid arrangement of players only occurs when there is a single destination.
+ * Targetnames support the wildcard character at the end (name*).
+ * Grid arrangement of players will only work when there is a single destination.
  *
  * @param {any} targets Team number, entity instance, array of entities, targetname, classname
- * @param {any} destinations Instance or targetname string of destination entity or entities
+ * @param {any} destinations Team number, entity instance, array of entities, targetname, classname
  * @param {table} options Table of optional settings. See below
- * Options:
- * @param {bool} respawn Optionally respawn any dead players before teleporting (default: false)
- * @param {bool} grid Arrange players in grid formation around a single ent if true (default), or all on the ent if false
- * @param {bool} grid_spacing Distance between the center of each player in the grid (default: 64)
+ * Table options:
+ * @param {bool} respawn If players are to be teleported, respawn dead ones (default false)
+ * @param {bool} grid Arrange players in grid formation around a single ent if true, or all on the ent if false (default)
+ * @param {bool} grid_spacing Distance between each player if using grid formation (default: 64)
  * @param {bool} shuffle_destinations If the number of destination ents is greater than the number of targets, shuffle the destinations (default: true)
  * @return {number} Number of entities teleported
  */
-::TeleportStuff <-  function(targets, destinations, options = {}) {
+::TeleportStuff <- function(targets, destinations, options = null) {
+	options = (typeof options == "table") ? options : {};
 	local defaults = {
 		respawn = false
-		grid = true
+		grid = false
 		grid_spacing = 64.0 // space between entities in grid formation
 		shuffle_destinations = true // shuffle destinations when they surpass targets
 	}
@@ -325,7 +353,7 @@ foreach(key, value in constants) {
 	// exit early if no targets or destinations
 	if (destinations.len() == 0 || targets.len() == 0) {
 		printl("TeleportStuff -- Destinations or targets not found. Destinations: " + destinations.len() + " Targets: " + targets.len());
-		return;
+		return 0;
 	}
 
 	local teleported = 0;
@@ -406,6 +434,35 @@ foreach(key, value in constants) {
 	return teleported;
 };
 
+/**
+ * Add an OnDestroy callback to an edict.
+ * Does not work on server-side ents.
+ * Code taken from the VDC Wiki.
+ * @param {instance} edict Edict instance
+ */
+::SetDestroyCallback <- function(edict, callback) {
+	edict.ValidateScriptScope()
+	local scope = edict.GetScriptScope()
+	scope.setdelegate({}.setdelegate({
+		parent = scope.getdelegate()
+		id = edict.GetScriptId()
+		index = edict.entindex()
+		callback = callback
+		_get = function(k) {
+			return parent[k]
+		}
+		_delslot = function(k) {
+			if (k == id) {
+				edict = EntIndexToHScript(index)
+				local scope = edict.GetScriptScope()
+				scope.self <- edict
+				callback.pcall(scope)
+			}
+			delete parent[k]
+		}
+	}))
+};
+
 
 /**
  * Sound
@@ -415,101 +472,102 @@ foreach(key, value in constants) {
 // This array will be used to store looping ambient sounds so they can be stopped before round restart
 ::matty.sounds <- [];
 
-/**
- * Precache and play a sound, using EmitSoundEx with some default parameters.
- * There is an additional optional parameter named 'radius' which is converted to sound_level.
- * https://developer.valvesoftware.com/wiki/Team_Fortress_2/Scripting/Script_Functions/EmitSoundEx
- * @param {table} params Table of parameters to pass to EmitSoundEx. Only 'sound_name' is required
- */
-::PPlay <-  function(params) {
-	local sound_name_lowercase = params.sound_name.tolower();
+// /**
+//  * Precache and play a sound, using EmitSoundEx with some default parameters.
+//  * There is an additional optional parameter named 'radius' which is converted to sound_level.
+//  * https://developer.valvesoftware.com/wiki/Team_Fortress_2/Scripting/Script_Functions/EmitSoundEx
+//  * @param {table} params Table of parameters to pass to EmitSoundEx. Only 'sound_name' is required
+//  */
+// ::PPlay <-  function(params) {
+// 	local sound_name_lowercase = params.sound_name.tolower();
 
-	if (sound_name_lowercase.find(".wav") || sound_name_lowercase.find(".mp3")) {
-		PrecacheSound(params.sound_name);
-	} else {
-		PrecacheScriptSound(params.sound_name);
-	}
+// 	// precache
+// 	if (sound_name_lowercase.find(".wav") || sound_name_lowercase.find(".mp3")) {
+// 		PrecacheSound(params.sound_name);
+// 	} else {
+// 		PrecacheScriptSound(params.sound_name);
+// 	}
 
-	local defaults = {
-		channel = 6
-		sound_level = 80
-		entity = self
-	}
+// 	// default sound settings
+// 	local defaults = {
+// 		channel = 6
+// 		sound_level = 80
+// 		entity = self
+// 	}
 
-	foreach(key, value in defaults) {
-		if (!(key in params)) {
-			params[key] <- value;
-		}
-	}
+// 	foreach(key, value in defaults) {
+// 		if (!(key in params)) {
+// 			params[key] <- value;
+// 		}
+// 	}
 
-	// convert radius to decibels
-	if ("radius" in params) {
-		params.sound_level = SoundRadiustoDecibels(params.radius);
-	}
+// 	// convert radius to decibels
+// 	if ("radius" in params) {
+// 		params.sound_level = SoundRadiustoDecibels(params.radius);
+// 	}
 
-	// assign origin for server-side entities (e.g. logic_relay)
-	if ("entity" in params && params.entity.entindex() == 0) {
-		if (!("origin" in params)) {
-			params.origin <- params.entity.GetOrigin();
-		}
-	}
+// 	// assign origin for server-side entities (e.g. logic_relay)
+// 	if ("entity" in params && params.entity.entindex() == 0) {
+// 		if (!("origin" in params)) {
+// 			params.origin <- params.entity.GetOrigin();
+// 		}
+// 	}
 
-	// add looping sounds to loop list
-	if (sound_name_lowercase.find("loop")) {
-		local soundlist = matty.sounds;
+// 	// // add looping sounds to loop list
+// 	// if (sound_name_lowercase.find("loop")) {
+// 	// 	local soundlist = matty.sounds;
 
-		// remove from the list if this is a stop instruction
-		if ("flags" in params && params.flags & SND_STOP) {
-			for (local i = soundlist.len() - 1; i >= 0; i--) {
-				local sound = soundlist[i];
+// 	// 	// remove from the list if this is a stop instruction
+// 	// 	if ("flags" in params && params.flags & SND_STOP) {
+// 	// 		for (local i = soundlist.len() - 1; i >= 0; i--) {
+// 	// 			local sound = soundlist[i];
 
-				if (sound.sound_name == params.sound_name && sound.entity == params.entity) {
-					soundlist.remove(i);
-					// printl(__FILE__ + " looping sound removed: " + params.sound_name);
-				}
-			}
-		} else {
-			// printl(__FILE__ + " looping sound found: " + params.sound_name); //
-			soundlist.append(params);
-		}
-	}
+// 	// 			if (sound.sound_name == params.sound_name && sound.entity == params.entity) {
+// 	// 				soundlist.remove(i);
+// 	// 				// printl(__FILE__ + " looping sound removed: " + params.sound_name);
+// 	// 			}
+// 	// 		}
+// 	// 	} else {
+// 	// 		// printl(__FILE__ + " looping sound found: " + params.sound_name); //
+// 	// 		soundlist.append(params);
+// 	// 	}
+// 	// }
 
-	// DumpObject(params);
-	// printl(__FILE__ + " is emitting " + params.sound_name + " from " + params.entity);
+// 	// DumpObject(params);
+// 	// printl(__FILE__ + " is emitting " + params.sound_name + " from " + params.entity);
 
-	EmitSoundEx(params);
-};
+// 	EmitSoundEx(params);
+// };
 
 /**
  * Simple sound playing function designed for one-shot sounds
- * Precaches the sound before playing
+ * The sound is precached before being played. The target entity is the default emission source.
  * Uses the static channel, and a sound_level of 80 by default
  * @param {string} sound Sound file or game sound name
  * @param {table} params Parameters to pass to EmitSoundEx.
  * Custom parameter 'radius' converts Hammer units into sound_level
- * Custom parameter 'source' is the entity handle to emit from
  */
-::PlaySound <-  function(sound, params = {}) {
+::PlaySound <- function(sound, params = null) {
+	params = (typeof params == "table") ? params : {};
 	local extension = (sound.len() > 4) ? sound.slice(-4).tolower() : null;
-	// printl(__FILE__ + "-- PlaySound caller: " + caller + " activator: " + activator + " self: " + self);
 
 	// precache
 	if (extension == ".wav" || extension == ".mp3") {
 		PrecacheSound(sound);
 	} else {
 		if (!PrecacheScriptSound(sound)) {
-			printl(__FILE__ + " -- PlaySound -- soundscript sound not found: " + params.sound_name);
+			printl(__FILE__ + " -- PlaySound -- soundscript sound not found: " + sound);
 			return;
 		}
 	}
 
 	// parameters
 	local defaults = {
+		sound_name = sound
 		channel = 6
 		sound_level = 80
 		entity = self
 	}
-
 	foreach(key, value in defaults) {
 		if (!(key in params)) {
 			params[key] <- value;
@@ -521,9 +579,71 @@ foreach(key, value in constants) {
 		params.sound_level = SoundRadiustoDecibels(params.radius);
 	}
 
-	// source
-	if ("source" in params) {
-		params.entity = source;
+	// entity
+	if (params.entity.entindex() == 0) {
+		if (!("origin" in params)) {
+			params.origin <- params.entity.GetOrigin();
+		}
+	}
+
+	// // looping
+	if ("looping" in params && params.looping == true) {
+		matty.sounds.append(params);
+
+		// add an OnDestroy callback to edicts
+		if (params.entity.entindex() > 0) {
+			SetDestroyCallback(params.entity, function() {
+				ChatMsg(null, "Stopping sound " + params.sound_name + " on " + self);
+				self.StopSound(params.sound_name); // todo: test the below code works with looping and one-shot sounds of different names
+				// EmitSoundEx({
+				// 	sound_name = params.sound_name
+				// 	flags = SND_STOP | SND_IGNORE_NAME | SND_STOP_LOOPING
+				// })
+			})
+		}
+	}
+
+	EmitSoundEx(params);
+};
+
+/**
+ * Simple sound playing function designed for one-shot sounds
+ * The sound is precached before being played. The target entity is the default emission source.
+ * Uses the static channel, and a sound_level of 80 by default
+ * @param {string} sound Sound file or game sound name
+ * @param {table} params Parameters to pass to EmitSoundEx.
+ * Custom parameter 'radius' converts Hammer units into sound_level
+ */
+::PlaySound <- function(sound, params = null) {
+	params = (typeof params == "table") ? params : {};
+	local extension = (sound.len() > 4) ? sound.slice(-4).tolower() : null;
+
+	// precache
+	if (extension == ".wav" || extension == ".mp3") {
+		PrecacheSound(sound);
+	} else {
+		if (!PrecacheScriptSound(sound)) {
+			printl(__FILE__ + " -- PlaySound -- soundscript sound not found: " + sound);
+			return;
+		}
+	}
+
+	// parameters
+	local defaults = {
+		sound_name = sound
+		channel = 6
+		sound_level = 80
+		entity = self
+	}
+	foreach(key, value in defaults) {
+		if (!(key in params)) {
+			params[key] <- value;
+		}
+	}
+
+	// radius
+	if ("radius" in params) {
+		params.sound_level = SoundRadiustoDecibels(params.radius);
 	}
 
 	// entity
@@ -537,17 +657,65 @@ foreach(key, value in constants) {
 };
 
 /**
- * Play a sound to a player
- * Useful for UI sounds
+ * Play a sound only for one player
+ * Due to the way filtering works, you must specify an origin manually
+ * if you wish the sound to be emitted from anywhere other than the client.
+ * This unfortunately means the sound's position will not update with an edict in motion.
+ * TODO: If you specify a soundlevel, the entity will be used rather than the origin
+ * @param {instance} client Client instance to play sound to
  * @param {string} sound Sound file or game sound name
- * @param {table} params Parameters to pass to EmitSoundEx
+ * @param {table} params Optional parameters to pass to EmitSoundEx
  */
-::PlayToClient <-  function(client, sound, table = {}) {
-	table.entity <- client;
-	table.channel <- 0;
-	table.sound_level <- 0;
-	table.filter <- 4;
-	SPlay(sound, table);
+::PlaySoundToClient <- function(client, sound, params = null) {
+	params = (typeof params == "table") ? params : {};
+
+	// parameters
+	local defaults = {
+		channel = CHAN_AUTO
+		sound_level = 80
+	}
+	foreach(key, value in defaults) {
+		if (!(key in params)) {
+			params[key] <- value;
+		}
+	}
+	params.entity <- client;
+	params.filter_type <- RECIPIENT_FILTER_SINGLE_PLAYER;
+
+	PlaySound(sound, params);
+};
+
+/**
+ * Play an ambient sound in the environment.
+ * The sound will be transmitted to players not in the PAS and to newly-connecting clients.
+ * Designed to take the place of ambient_generic.
+ * Contains appropriate default settings for raw sound files.
+ */
+::PlayAmbient <- function(sound, params = null) {
+	params = (typeof params == "table") ? params : {};
+
+	// defaults
+	local defaults = {
+		sound_name = sound
+		channel = 6
+		flags = SND_SPAWNING
+		filter_type = RECIPIENT_FILTER_GLOBAL
+		// looping = true
+	}
+
+	// copy defaults into params table
+	foreach(key, value in defaults) {
+		if (!(key in params)) {
+			params[key] <- value;
+		}
+		// OR flags if they already exist
+		else if (key == "flags") {
+			params.flags = params.flags | defaults.flags;
+		}
+	}
+
+	matty.sounds.append(params); // add to loop list so its stopped before round restart
+	PlaySound(sound, params);
 };
 
 /**
@@ -556,9 +724,25 @@ foreach(key, value in constants) {
  * @param {integer} radius Radius in units
  * @return {integer} soundlevel equivalent
  */
-::SoundRadiustoDecibels <-  function(radius) {
+::SoundRadiustoDecibels <- function(radius) {
 	return (40 + (20 * log10(radius / 36.0))).tointeger();
 };
+
+// /**
+//  * Remove a sound from the loop list
+//  * @param {table} params Table of EmitSoundEx parameters
+//  */
+// ::RemoveLoopingSound <-  function(params) {
+// 	local soundlist = ::matty.sounds;
+
+// 	for (local i = soundlist.len() - 1; i >= 0; i--) {
+// 		local sound = soundlist[i];
+
+// 		if (sound.sound_name == params.sound_name && sound.entity == params.entity) {
+// 			soundlist.remove(i);
+// 		}
+// 	}
+// };
 
 
 /**
@@ -867,19 +1051,20 @@ foreach(key, value in constants) {
 };
 
 /**
- * Simpler player getter
- * Options:
- * * targetname = `whatever*`
- * * alive = true/false
- * * team = number/constant (TF_TEAM_RED)
- * * bot = true/false
- * * observer = true/false
- * * shuffle = anything (ignored)
- * * sort = `userid` (time on server)
+ * Get an array of all players.
+ * Pass optional parameters in a table to filter results:
+ * * targetname = `name*` (supports Hammer wildcard)
+ * * alive = true for live players, false for dead players
+ * * team = team index or enum constant (e.g. TF_TEAM_RED)
+ * * bot = true for bots, false for humans
+ * * observer = true for observers, false for non-observers
+ * * shuffle = true to shuffle, false is ignored
+ * * sort = currently only accepts string value `userid`, which equates to the length of the player's server session, descending
  * @param {table} options Filtering rules
  * @return {array} Player instances
  */
-::GetPlayers <-  function(options = {}) {
+::GetPlayers <- function(options = null) {
+	options = (typeof options == "table") ? options : {};
 	local players = [];
 
 	// targetname search
@@ -932,7 +1117,7 @@ foreach(key, value in constants) {
 	}
 
 	// shuffle
-	if ("shuffle" in options) {
+	if ("shuffle" in options && options.shuffle == true) {
 		local players_new = [];
 		while (players.len() > 0) {
 			players_new.push(players.remove(RandomInt(0, players.len() - 1)));
@@ -956,7 +1141,7 @@ foreach(key, value in constants) {
  * Get red players
  * @return {array} Array of player instances
  */
-::GetReds <-  function() {
+::GetReds <- function() {
 	return Players().Team(TF_TEAM_RED).Array();
 };
 
@@ -964,7 +1149,7 @@ foreach(key, value in constants) {
  * Get live red players
  * @return {array} Array of player instances
  */
-::LiveReds <-  function() {
+::LiveReds <- function() {
 	return Players().Team(TF_TEAM_RED).Alive().Array();
 };
 
@@ -972,7 +1157,7 @@ foreach(key, value in constants) {
  * Get dead red players
  * @return {array} Array of player instances
  */
-::DeadReds <-  function() {
+::DeadReds <- function() {
 	return Players().Team(TF_TEAM_RED).Dead().Array();
 };
 
@@ -980,7 +1165,7 @@ foreach(key, value in constants) {
  * Get blue players
  * @return {array} Array of player instances
  */
-::GetBlues <-  function() {
+::GetBlues <- function() {
 	return Players().Team(TF_TEAM_BLUE).Array();
 };
 
@@ -988,7 +1173,7 @@ foreach(key, value in constants) {
  * Get live blue players
  * @return {array} Array of player instances
  */
-::LiveBlues <-  function() {
+::LiveBlues <- function() {
 	return Players().Team(TF_TEAM_BLUE).Alive().Array();
 };
 
@@ -996,8 +1181,18 @@ foreach(key, value in constants) {
  * Get dead blue players
  * @return {array} Array of player instances
  */
-::DeadBlues <-  function() {
+::DeadBlues <- function() {
 	return Players().Team(TF_TEAM_BLUE).Dead().Array();
+};
+
+/**
+ * Get all live players
+ * @return {array} Array of player instances
+ */
+::LivePlayers <- function() {
+	return GetPlayers({
+		alive = true
+	});
 };
 
 
@@ -1007,19 +1202,11 @@ foreach(key, value in constants) {
  */
 
 /**
- * Checks if a player is alive
- * @return {bool} - True if the player is alive, false otherwise
- */
-CTFPlayer_IsAlive <-  function() {
-	return NetProps.GetPropInt(this, "m_lifeState") == 0;
-}
-
-/**
  * Cause the player to just die
  * @param {bool} silently Quietly move the player to the 'unalive' state without any pain
  * @noreturn
  */
-CTFPlayer_Die <-  function(silently = true) {
+CTFPlayer_Die <- function(silently = true) {
 	if (!this.IsAlive()) {
 		return;
 	}
@@ -1048,7 +1235,7 @@ CTFPlayer_Die <-  function(silently = true) {
  * @param {bool} remove_ammopack Destroy the player's dropped ammo pack
  * @param {integer} effect TF_DMG_CUSTOM effect
  */
-CTFPlayer_Fizzle <-  function(remove_weapon = false, remove_ammopack = false, effect = TF_DMG_CUSTOM_PLASMA) {
+CTFPlayer_Fizzle <- function(remove_weapon = false, remove_ammopack = false, effect = TF_DMG_CUSTOM_PLASMA) {
 	local Dissolve = function(ent, source = null) {
 		source = (source == null) ? ent : source;
 		ent.TakeDamageCustom(null, source, null, Vector(0, 0, 0), ent.GetOrigin(), ent.GetHealth(), 0, effect);
@@ -1091,7 +1278,7 @@ CTFPlayer_Fizzle <-  function(remove_weapon = false, remove_ammopack = false, ef
  * (Dead on a participating team or on Spectator team, and watching a player, game objective or observer point)
  * @return {bool} True if player is observing something
  */
-CTFPlayer_IsObserver <-  function() {
+CTFPlayer_IsObserver <- function() {
 	return NetProps.GetPropInt(this, "m_iObserverMode") != 0;
 }
 
@@ -1099,7 +1286,7 @@ CTFPlayer_IsObserver <-  function() {
  * Get a player's name
  * @return {string} - Player's name
  */
-CTFPlayer_Name <-  function() {
+CTFPlayer_Name <- function() {
 	return NetProps.GetPropString(this, "m_szNetname");
 }
 
@@ -1108,7 +1295,7 @@ CTFPlayer_Name <-  function() {
  * Returned string already includes \x01 reset colour code at the end
  * @return {string} Player's team-coloured name
  */
-CTFPlayer_CName <-  function() {
+CTFPlayer_CName <- function() {
 	return ChatColor(this) + this.Name() + CHAT_COLOR_01;
 }
 // I had to reduce this from ColoredName because it wasn't getting added. Too long?
@@ -1117,7 +1304,7 @@ CTFPlayer_CName <-  function() {
  * Get a player's Steam Id
  * @return {string} Steam Id
  */
-CTFPlayer_SteamId <-  function() {
+CTFPlayer_SteamId <- function() {
 	return NetProps.GetPropString(this, "m_szNetworkIDString");
 }
 
@@ -1127,7 +1314,7 @@ CTFPlayer_SteamId <-  function() {
  * compared with others
  * @return {integer} User Id
  */
-CTFPlayer_UserId <-  function() {
+CTFPlayer_UserId <- function() {
 	return NetProps.GetPropIntArray(tf_player_manager, "m_iUserID", this.entindex());
 }
 
@@ -1161,7 +1348,7 @@ foreach(key, value in this) {
  * @param {string} message Message string
  * @param {integer} destination Destination channel. Text chat by default but you could use HUD_PRINTCENTER
  */
-::ChatMsg <-  function(targets, message, destination = HUD_PRINTTALK) {
+::ChatMsg <- function(targets, message, destination = HUD_PRINTTALK) {
 	// add colour code to start of line if colour is used without it
 	local len = message.len();
 	for (local i = 0; i < len; i++) {
@@ -1222,7 +1409,7 @@ foreach(key, value in this) {
  * @param {any} value Input value
  * @return {string} Hexadecimal chat colour prefix. 'Standard' \x01 if no match found
  */
-::ChatColor <-  function(value = null) {
+::ChatColor <- function(value = null) {
 	local color = CHAT_COLOR_01;
 
 	// default value
@@ -1270,7 +1457,7 @@ foreach(key, value in this) {
  * @param {any} targets Target data object
  * @param {string} message Message string
  */
-::CenterMsg <-  function(targets, message) {
+::CenterMsg <- function(targets, message) {
 	ChatMsg(targets, message, HUD_PRINTCENTER);
 };
 
@@ -1280,7 +1467,7 @@ foreach(key, value in this) {
  *
  * @param {string} text - Message to display
  * @param {instance} entity - Instance of the entity to display above
- * @param {array} players Array of players to display the message to. Note: Client 32 will never see it due to a coding limitation in the game
+ * @param {array} players Optional array of players to display the message to. Note: Client 32 will never see it due to a coding limitation in the game
  * @param {number} lifetime - Time the annotation is displayed for in seconds
  * @param {string} sound - Sound to play
  * @param {bool} show_distance - Display the distance from the annotation
@@ -1288,7 +1475,8 @@ foreach(key, value in this) {
  * @param {number} id - Unique Id number of this annotation. Annotations using the same Id will replace it. Uses the entity index by default
  * @noreturn
  */
-::Annot <-  function(options = {}) {
+::Annot <- function(options = null) {
+	options = (typeof options == "table") ? options : {};
 	local defaults = {
 		text = "Your message here!"
 		entity = null
@@ -1353,19 +1541,20 @@ foreach(key, value in this) {
 
 /**
  * Randomise an array
- * @param {array} array Input array
+ * @param {array} input_array Input array
  * @return {array} A new array with the original values in a random order
  */
-::RandomiseArray <-  function(array) {
+::RandomiseArray <- function(input_array) {
 	local new_array = [];
 
-	while (array.len() > 0) {
-		local index = RandomInt(0, array.len() - 1);
-		new_array.push(array.remove(index));
+	while (input_array.len() > 0) {
+		local index = RandomInt(0, input_array.len() - 1);
+		new_array.push(input_array.remove(index));
 	}
 
 	return new_array;
-};
+}; //
+::ShuffleArray <- RandomiseArray;
 
 
 /**
@@ -1377,7 +1566,7 @@ foreach(key, value in this) {
  * Iterates the event tables and removes any entries attached to an invalid instance
  * Unlike ClearGameEventCallbacks, this does not wipe every event from the tables
  */
-::CleanGameEventCallbacks <-  function() {
+::CleanGameEventCallbacks <- function() {
 	local Clean = function(event_table) {
 		if (!(event_table in ROOT)) {
 			return;
@@ -1393,8 +1582,24 @@ foreach(key, value in this) {
 	};
 
 	Clean("GameEventCallbacks");
-	// clean(ScriptEventCallbacks);
+	Clean("ScriptEventCallbacks");
 	Clean("ScriptHookCallbacks");
+};
+
+/**
+ * Get the frame rate or 'tick rate'
+ * TF2 is normally 66.6 fps, but some servers push it higher
+ * Note that the frame count on a listen server increments by twice that of a dedicated server
+ * @return {number} The frame rate of the server in frames per second
+ */
+::GetServerFrameRate <- function() {
+	local rate = 1 / FrameTime();
+
+	if (IsDedicatedServer()) {
+		return rate;
+	} else {
+		return rate * 2;
+	}
 };
 
 
@@ -1403,81 +1608,6 @@ foreach(key, value in this) {
  * Further Instructions
  * ----------------------------------------------------------------------------------------------------
  */
-
-/**
- * Matty's Player Lists v0.1
- *
- * Easy creation of lists of players by characteristic.
- * Chain methods to further refine the list.
- *
- * Usage:
- * `Players()` returns all players on red and blue as a Players class instance.
- * Chain methods to refine the results.
- * Adding the `.players` property to the end of the chain returns the results in an array.
- * Many methods can be given a `false` argument to invert them.
- *
- * Example									Method						Alternative
- * Get all players on team 2 (Red)			Players().Team(2)
- * Get all dead players on team 3 (Blue)	Players().Team(3).Dead()
- * Get all bot players						Players().Bot()				Players().Human(false)
- * Get all non-bot players					Players().Human()			Players().Bot(false)
- * Get all live players						Players().Alive()			Players().Dead(false)
- * Get all observers						Players().Observing()
- * Get all players with the targetname		Players().Targetname(`whatever`)
- * Get all players within a radius			Players().Radius(origin, radius)
- *
- * Modify the results
- * Shuffle the order of the array			Players().Shuffle()
- * Sort by time on the server / User Id		Players().SortByUserId()
- * Exclude a player, array of players or Players results
- * 											Players().Exclude(player)	Players().Exclude(Players.Dead())
- *
- * Debugging
- * Display the results in the console		Players().Display()
- */
-
-/**
- * Matty's Universal Teleporter v0.2.1.1
- * Designed to be included by matty/stocks/globals.nut
- *
- * Teleport any entity or array of entities to one or more destinations.
- * Optionally arrange in a grid around a single destination (on by default).
- *
- * Inputs accept an entity instance, array of entities, targetname or classname.
- * All instances of the supplied targetname or classname are found.
- * Also accepts the integer value of a team, e.g. 2 for red.
- *
- * Teleport players conveniently without needing to make map-wide triggers.
- * Optionally respawns any dead player passed into the function (off by default).
- */
-
-/**
- * Usage:
- *
- * TeleportStuff(source entity or entities, destination entity or entities)
- * Both values can be a `targetname`, `classname`, instance, array or team number.
- * All instances of targetnames and classnames are used.
- *
- * 		TeleportStuff(TF_TEAM_RED, `multiple_destinations`)
- * 		TeleportStuff(3, `single_destination`)
- * 		TeleportStuff(`named_entities`, array_of_entities)
- *
- * Optional arguments 3 and 4 and their default values
- * 		TeleportStuff(source, destination, respawn = false, grid = true)
- */
-
-/*
-TeleportStuff Changlog
-v0.2.2
-Created options table parameter and moved 'grid' and 'respawn' parameters into it.
-v0.2.1.1
-Target to teleport was being checked if it was an instance but presumed it was an entity.
-As a result, passing Players instances to it caused an error when it checked IsValid().
-Now, instances are checked if they are an instance of CBaseEntity or Players.
-v0.2.1
-Velocity is nullified on teleport
-*/
-
 
 /*
 	List of common constants
@@ -1509,7 +1639,6 @@ Velocity is nullified on teleport
     TF_DMG_CUSTOM_GOLD_WRENCH                (35) - Paralyze and play a gold hit sound
 */
 
-
 /*
 	Ragdoll properties for future use
 	m_bGib				High blood gib
@@ -1537,34 +1666,6 @@ Velocity is nullified on teleport
  * ----------------------------------------------------------------------------------------------------
  */
 
-/*
-EmitSoundEx common uses
-Playing a UI sound to a client
-Emitting a sound in the world from somewhere with a set radius
-Playing a looping ambient sound
-	Either store sound in a table or make an ambient_generic
-	Use RECIPIENT_FILTER_PAS
-
-Keyvalues
-sound
-	Sorts between raw and soundscript
-volume
-	Integer 100 percent or float 1.0 (or integer 1)
-radius
-	Integer
-channel
-	integer or string
-loop
-	If key provided, always true
-	SPlayAmbient(sound, table)
-playfrom
-	CBaseEntity Instance or targetname or origin
-playto
-	Play to a client or array of clients or Players()
-	SPlayToClient(sound, client, table)
-*/
-
-
 // ROOT
 //     GameEventCallbacks (event table)
 //         arena_round_start (event)
@@ -1577,13 +1678,6 @@ playto
 /**
  * TeleportStuff
  * Optionally use landmark style teleportation, if a landmark is specified
- * Use a table for options
- * Integrate PlayerLists.
- *
- * Teleport into circular formation around a destination?
- * 		teleport a set distance from a destination with an angle that's a fraction of a circle
- *		e.g. teleport 64  units from centre at 0, 90, 180, 270
- *  	teleport 128 units from centre at 0, 45, 90, 135, 180, etc.
  *
  * Grid todo
  * 		add min and max bounds for square
@@ -1591,116 +1685,3 @@ playto
  * 		support a ratio of rows to columns for a wide group
  * 		convert local origin to absolute origin somehow to allow for diagonal grids
  */
-
-
-/**
- * Old or WIP functions
- * ----------------------------------------------------------------------------------------------------
- */
-
-// work in progress. not functional
-/* function SPlay(sound, table = {}) {
-
-	// precache
-	local sound_name_lowercase = params.sound_name.tolower();
-	if (sound_name_lowercase.find(".wav") || sound_name_lowercase.find(".mp3")) {
-		PrecacheSound(params.sound_name);
-	} else {
-		if (!PrecacheScriptSound(params.sound_name)) {
-			printl(__FILE__ + " -- SPlay -- soundscript sound not found: " + params.sound_name);
-			return;
-		}
-	}
-
-	local sounds_to_play = [];
-
-	// create table for EmitSoundEx
-	local params = {
-		channel = 6 // chan_static
-		sound_level = 80 //
-	};
-
-	// volume
-	if ("volume" in table) {
-		if (typeof table.volume == "integer") {
-			if (table.volume == 1) {
-				params.volume <- 1.0;
-			} else {
-				params.volume <- table.volume * 0.01;
-			}
-		} else if (typeof table.volume == "float") {
-			params.volume <- table.volume;
-		}
-	}
-
-	// radius
-	if ("radius" in table) {
-		params.sound_level = SoundRadiustoDecibels(table.radius);
-	}
-
-	// channel
-	if ("channel" in table) {
-		local channel = table.channel;
-
-		if (typeof channel == "integer") {
-			params.channel = channel;
-		} else if (typeof channel == "string") {
-			if (channel == "static") {
-				params.channel = 6;
-			} else if (channel == "auto") {
-				params.channel = 0
-			}
-		}
-	}
-
-	//playfrom
-	if ("playfrom" in table) {
-
-		// array of instances to process later
-		local ents = [];
-
-		// entity instance
-		if (typeof table.playfrom == "instance" && table.playfrom instanceof CBaseEntity) {
-			ents.append(table.playfrom);
-		}
-
-		// string
-		else if (typeof table.playfrom == "string") {
-			local targetname = table.playfrom;
-			local ent = null;
-			local ents = [];
-
-			while ((ent = Entities.FindByName(ent, targetname)) != null) {
-				ents.append(ent);
-			}
-		}
-
-		// vector
-		else if (typeof table.playfrom == "vector") {
-			params.origin <- table.playfrom;
-			sounds_to_play.append(params);
-		}
-
-		// process array of ents
-		if (ents.len() > 0) {
-			foreach(ent in ents) {
-
-				// server-side ent or edict
-				if (ent.entindex() == 0) {
-					params.origin <- ent.GetOrigin();
-					delete params.entity;
-				} else {
-					params.entity <- ent;
-					delete params.origin;
-				}
-
-				sounds_to_play.append(params);
-			}
-		}
-	}
-
-	// play all tables in the array
-	foreach(sound in sounds_to_play) {
-		EmitSoundEx(sound);
-	}
-} */

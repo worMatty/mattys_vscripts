@@ -1,5 +1,5 @@
 /*
-	Easy PVC Control v0.4 - worMatty
+	Easy PVC Control v0.4.4 - worMatty
 	----------------------------------------------------------------------------------------------------
 
 	Enables you to use a point_viewcontrol with more than one player.
@@ -30,6 +30,10 @@
 
 /*
 	Changelog
+		0.4.4
+			Set m_hPlayer property of the pvc to null before and after sending it an input.
+			This should prevent a camera from disabling itself for its stored player handle
+			when requested to do so by the game code, in response to another player changing cameras.
 		0.4.3
 			* Replaced previously-created AcceptInput RunScriptCode calls with direct property changes
 		0.4.2
@@ -91,12 +95,16 @@ function EnableCamera(player = null) {
 
 	player.RemoveCond(7); // stop taunts
 	player.AddCond(87); // freeze input
+
 	scope.__m_nForceTauntCam <- NetProps.GetPropInt(player, "m_nForceTauntCam"); // store current taunt perspective
 	scope.current_pvc <- self; // store current pvc ent
-	NetProps.SetPropInt(player, "m_takedamage", 0); // take no damage
+
+	NetProps.SetPropInt(player, "m_takedamage", 0); // players will take no damage
 	player.SetForcedTauntCam(0); // set first-person perspective
-	// EntFireByHandle(self, "Enable", "", -1, player, null); // old EntFireByHandle-based code
-	self.AcceptInput("Enable", "", player, null); // new AcceptInput-based code
+
+	NetProps.SetPropEntity(self, "m_hPlayer", player); // prevent the previous client to use this camera being disconnected
+	self.AcceptInput("Enable", "", player, null);
+	NetProps.SetPropEntity(self, "m_hPlayer", null); // prevent the client from being disconnected from this view by another player disabling early
 }
 
 /**
@@ -123,6 +131,7 @@ function DisableCamera(player = null) {
 	// set camera's user property to the player, then Disable the camera for them
 	NetProps.SetPropEntity(self, "m_hPlayer", player);
 	self.AcceptInput("Disable", null, player, player);
+	NetProps.SetPropEntity(self, "m_hPlayer", null);
 
 	// restore the player's previous lifestate and set the appropriate takedamage value
 	NetProps.SetPropInt(player, "m_lifeState", player.GetScriptScope().__lifestate);
@@ -162,6 +171,9 @@ if (!("__pvc_event_teamplay_round_start" in getroottable())) {
 	3. Set the camera's m_hPlayer property to the player's handle, using SetPropEntity
 	4. Disable, using the player as activator
 	5. Restore the player's previous life state
+
+	The code for this entity is in source-sdk-2013/src/game/server/triggers.cpp.
+	https://github.com/ValveSoftware/source-sdk-2013/blob/68c8b82fdcb41b8ad5abde9fe1f0654254217b8e/src/game/server/triggers.cpp#L2852
 */
 
 /*
@@ -172,4 +184,12 @@ if (!("__pvc_event_teamplay_round_start" in getroottable())) {
 	You could try setting a fade distance on the player.
 
 	SetForceLocalDraw may be useable in rendering the player's model to themselves.
+
+	When you Enable a pvc for a player, the game will get the player's last pvc and disable that.
+	The pvc code will disable the camera for its stored player handle.
+	This can result in a player disabling a pvc for another player when they disable early.
+	One possible solution is to set the pvc's m_hPlayer variable
+	to the player's handle right before enabling it, and set it to null right after using any input on it.
+	This prevents subsequent disablements of the camera from disconnecting the stored player handle.
+	SpookyToad will be testing that in his new Berlin map version.
 */

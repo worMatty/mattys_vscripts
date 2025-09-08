@@ -1,5 +1,6 @@
 /*
-	Enables a map author to view feedback for their map
+	Enables a map author to view feedback for their map.
+	Feedback comes from Death Experiments map testing sessions.
 
 	Usage:
 	1. Ensure mapname.nut is in tf/scripts/vscripts/feedback

@@ -9,6 +9,12 @@
 	Does not support anything like checkpoints or respawning.
 */
 
+/*
+	Note:
+		This will likely be superceded at some point by a far better script.
+		I'm working on something at the moment that I can split out later.
+*/
+
 IncludeScript("matty/stocks2.nut");
 
 sounds <- [
