@@ -1,5 +1,5 @@
 /*
-	Matty's Stocks 2.1.2 WIP
+	Matty's Stocks 2.1.3
 
 	* Folds all native constants into root scope
 	* Adds several new useful constants
@@ -45,7 +45,9 @@
 /*
 	Changelog
 
-	2.1.2 WIP
+	2.1.3
+		* Added an option to GetPlayers: 'cap', to limit the maximum length of the array
+	2.1.2
 		* Replaced function parameter default arguments that were empty tables, with 'null', to avoid stale data
 		* Deleted CTFPlayer.IsAlive() as it exists natively now
 		* TeleportStuff - Grid spacing is now off by default
@@ -1060,6 +1062,7 @@ foreach(key, value in constants) {
  * * observer = true for observers, false for non-observers
  * * shuffle = true to shuffle, false is ignored
  * * sort = currently only accepts string value `userid`, which equates to the length of the player's server session, descending
+ * * cap = limit the maximum length of the array
  * @param {table} options Filtering rules
  * @return {array} Player instances
  */
@@ -1131,6 +1134,14 @@ foreach(key, value in constants) {
 			players.sort(function(a, b) {
 				return (a.UserId()) <=> (b.UserId());
 			})
+		}
+	}
+
+	// cap
+	if ("cap" in options) {
+		local cap = options.cap;
+		if (players.len() > cap) {
+			players = players.resize(cap);
 		}
 	}
 
