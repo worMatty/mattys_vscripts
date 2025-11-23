@@ -123,24 +123,34 @@
 
 /*
 	Problems identified during a playtest
-	* tf_arena_use_queue needs to be disabled - done
 	* If you blast a rocket into the ground, it will hit the ground and explode
-	* People can get outside the map
-	* Orbiting is hard. Make a solo mode and test with it - done
-	* On resurrecting them manually, some players' games crashed. Could it be a result of being respawned too quickly earlier?
-	* Try targeting the player's eye position instead of their center. - test
-		Try a point between their center and eyes, or go back to center and deal with floor collision
-	* People still spawn in the center - test
-		Attempted fix by hiding player spawn event because I think it gets triggered by people on team 0
-	* Rocket collides with ground too often. Could increase turn rate on deflect for a little bit?
-		Would not look as good. Could try clamping pitch
-	* Run out of primary ammo and your weapon switches, and you can't switch back
-	* Check to see if modifications to weapons are carried into the next round.
-		* If they are, see if there is a way to mark the weapon for deletion on round restart
-			Could try adding a flag or parenting it to the logic_script
-		* Add regeneration to our StopGame function, if the round is still active
+		Possible solutions:
+		1. Increase the turn rate of the rocket temporarily
+		2. Prevent collision with worldspawn for a fraction of a second by correcting trajectory if it's about to hit
+			Alternatively, perform a trace each frame and if worldspawn is detected, interpolate the trajectory to smoothly avoid it.
+			We could follow the normal of the face.
+		3. Clamp downwards rocket pitch on airblast
 
-	Turn rate stuff
+	* Run out of primary ammo and your weapon switches, and you can't switch back
+		1. Investigate situations where ammo could be lost
+		2. Replenish primary ammo if it's not already full (regenerating player would already do this)
+		3. Restore ammo to an amount every frame (not ideal)
+
+	* Check to see if our modifications to weapons are carried into the next round.
+		* If they are, see if there is a way to mark the weapon for deletion on round restart
+			Could try adding a flag or parenting it to the logic_script or just removing using pre-restart event
+		* Regeneratre players in our StopGame function if the round is still active
+
+	* If you allow players to use their existing flamethrowers then they are subject to the server's meddling
+		Possible solutions:
+		1. Replace the weapon outright. See if you can copy the existing weapon's properties somehow
+			Maybe by forcing a weapon drop then picking it up. It would spawn as a new weapon with the same skin
+		2. Let the player replace their weapon using a command
+		3. Find out how servers are disabling airblasting and remedy this
+		3a. Map config for server operator to tell the map to replace with stock guns
+		4. Investigate if common server-side weapon modification methods leave some evidence on the weapon
+
+	Turn rate stuff. I think I already addressed all this
 	* Adjusting turn rate to match speed works but it removes the long orbiting penalty
 	* We could introduce a timer which explodes the rocket after a time
 	* Find what turn rate matches what speed and plot a range.
@@ -163,6 +173,20 @@
 	* Players who are respawned during a game will be given the correct loadout but a server weapon restriction plugin may interfere.
 		This has not been tested. It is best only to start a game when players have been alive for a few frames.
 		If this functionality is required I can look into it but it's highly dependent on the server setup.
+		At the very least we could delay weapon modification by two frames, as server plugins probably do it on the first frame after
+*/
+
+/*
+	Todo for next version
+
+	We don't need CTFPlayer properties or methods. We can use a table in the script.
+
+	Support for separate games, bundling in any players from the start.
+	Allows us to run multiple games at a time on minigame or trade maps.
+	Remove players from the game if they die.
+
+	Reevaulate support for reflecting rockets using a trigger.
+	We could also trace collision with entities and bounce off if it has a targetname match.
 */
 
 IncludeScript("matty/stocks2.nut");
@@ -331,24 +355,6 @@ function OnGameEvent_player_initial_spawn(params) {
 }
 
 /**
- * Change player class to pyro if game settings dictate
- * Commented out because I think it's spawning new joiners immediately at origin
- */
-// function OnGameEvent_player_spawn(params) {
-// 	// self.IsValid() is required to prevent the event firing in future rounds
-// 	if (self.IsValid() == false) {
-// 		return;
-// 	}
-
-// 	local player = GetPlayerFromUserID(params.userid);
-// 	if (player != null && game_active) {
-// 		if (game_settings.change_to_pyro && player.GetPlayerClass() != TF_CLASS_PYRO) {
-// 			ChangePlayerClass(player, TF_CLASS_PYRO);
-// 		}
-// 	}
-// }
-
-/**
  * Ensure the player has a useable flamethrower post-respawn
  * TODO: Do I need to add a delay to this to counter deathrun plugin interference
  */
@@ -363,6 +369,8 @@ function OnGameEvent_post_inventory_application(params) {
 		// change to pyro on next frame
 		if (game_settings.change_to_pyro && player.GetPlayerClass() != TF_CLASS_PYRO) {
 			EntFireByHandle(self, "RunScriptCode", "ChangePlayerClass(activator, TF_CLASS_PYRO);", 0, player, null);
+			// todo: Add a printl with the frame number to see how many frames pass when using a delay of 0
+			// better yet, create a frame timer system to ensure two frame delay.
 			// ChangePlayerClass(player, TF_CLASS_PYRO);
 		}
 		// ensure they have a flamethrower with required attributes
