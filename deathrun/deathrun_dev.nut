@@ -48,6 +48,7 @@
 			savepos - save your current position so you can teleport to it later
 			back - teleport to your saved position
 			stay <on/off> - when on, if alive just before the round restarts, you will be teleported back to the same place afterwards
+			bring <name/@me/@red/@blue/@all> - teleport targets to your position
 		Round/game
 			restart - restart the game, or in Arena mode, slay everyone but yourself to cause a round restart
 
@@ -309,9 +310,6 @@ if (deathrun_dev.faster_round_restart) {
 	ServerCommand("mp_waitingforplayers_cancel 1"); // cancel waiting for players time
 	SetConvar("tf_arena_preround_time", 5); // countdown at start of arena match
 	SetConvar("mp_bonusroundtime", 5); // victory time
-} else {
-	SetConvar("tf_arena_preround_time", 10);
-	SetConvar("mp_bonusroundtime", 15);
 }
 
 // development commands

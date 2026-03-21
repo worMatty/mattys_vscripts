@@ -1,6 +1,6 @@
 /*
 	Deathrun Health Scaling
-	Version 1.2.1 by worMatty
+	Version 1.2.1.1 by worMatty
 
 	Scales the health of any blue players up to an amount appropriate for the number of live reds.
 	Should be used on the commencement of an Arena game after any reds have been respawned.
@@ -35,6 +35,8 @@
 
 /*
 	Changelog
+		1.2.1.1
+			* Bug fix in backstab array append code (checked if return value of an array find was false instead of null)
 		1.2.1
 			* Event hooks deleted prior to round restart to keep things clean
 			* Event hooks not created when not protecting against backstabs
@@ -83,7 +85,7 @@ function ScaleBlueHealth(announce = true, reduce_backstab = true) {
 		player.AddCustomAttribute("health from packs decreased", GetTFClassHealth(player.GetPlayerClass()) / health, -1);
 
 		// reduce backstab damage
-		if (reduce_backstab && !backstab_players.find(player)) {
+		if (reduce_backstab && backstab_players.find(player) == null) {
 			backstab_players.append(player);
 		}
 
