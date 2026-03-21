@@ -1,5 +1,5 @@
 /*
-	Holidays v0.2 by worMatty
+	Holidays v0.2.3 by worMatty
 	A more advanced holiday control system than using tf_logic_on_holiday alone.
 
 	Features
@@ -88,6 +88,8 @@
 
 /*
 	Changelog
+		0.2.3
+			* Added ClearOverride function to clear the date override
 		0.2.2
 			* Replaced date checking code
 			* Bug fix: Date check was not checking end day properly
@@ -458,6 +460,14 @@ if ("holidays" in getroottable() == false) {
 			foreach (key, val in active_holidays) {
 				printl(__FILE__ + " " + val.name);
 			}
+		}
+
+		/**
+		 * Clear the date override
+		 */
+		function ClearOverride() {
+			override_date = null;
+			printl(__FILE__ + " -- Override date removed");
 		}
 	};
 };

@@ -9,86 +9,41 @@
  * You can use SetText to change the message. If that's all you want, you don't need this
  */
 
-/*
-	Planned changes
-		* On load, find all point_world text and add input hooks to them
-		* Make a central function for storing and retrieving translation phrases
-		* Scan a pwt's message field and replace a special char with a linebreak
-*/
-
-/*
-
-	Important info about strings:
-
-	ficool2 — 09/04/2023 21:35
-	the SetText input works
-	but it can eventually crash from allocating too many strings
-	not an issue if your strings arent unique
-	if they are, its possible to delete those strings
-	spawning an entity with the targetname of that string, setting m_bForcePurgeFixedupStrings netprop to true and killing the entity will free that string
-	these strings are also cleared on round restarts
-	dumpgamestringtable will show if your strings are 'leaking' like this
-
-*/
-
-/*
-
-Info about point_worldtext and line break characters \n
-
-if the entity's message field in Hammer contains a line break character, then when it is loaded by
-a (Windows?) dedicated server, its s_zText property will be empty.
-
-Outputs created in Hammer which set the message using AddOutput or RunScriptCode() are apparently
-deleted if they contain a line break character.
-
-The only option available appears to be to put the phrases in a script and load them from there.
-
-*/
-
-::phrases <- {
-	example = "This is an\nexample phrase"
-	kill_silently = "Kill\nsilently"
-	long = "Terminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\nTerminal text text text text\n"
-}
-
-// ----------------------------------------------------------------------------------------------------
-
-function AddFunctions(ent) {
-	ent.ValidateScriptScope();
-	local scope = ent.GetScriptScope();
-
-	scope.GetMessage <-  function() {
-		return NetProps.GetPropString(self, "m_szText");
-	}
-
-	scope.SetMessage <-  function(message) {
-		message = message.tostring();
-		message = CheckMessage(message);
-		self.AcceptInput("AddOutput", "message " + message, null, null);
-	}
-
-	scope.CheckMessage <-  function(message) {
-		if (startswith(message, "phrases.") && "phrases" in getroottable()) {
+// functions table. these will be added to point_worldtext scriptscope
+local functions = {
+	FormatMessage = function(message) {
+		if (startswith(message, "phrases.") && "phrases" in getroottable()) { // replace phrase key with value
 			message = ::phrases[message.slice(8)];
-		} else {
+		} else { // replace // with newline
 			local index = 0;
 			while ((index = message.find("//")) != null) {
 				message = message.slice(0, index) + "\n" + message.slice(index + 2);
 			}
 		}
-
 		return message;
 	}
-
-	scope.PostSpawnCheck <-  function() {
-		SetMessage(CheckMessage(GetMessage()));
+	GetMessage = function() {
+		return NetProps.GetPropString(self, "m_szText");
+	}
+	SetMessage = function(message) {
+		message = FormatMessage(message);
+		self.AcceptInput("AddOutput", "message " + message, null, null);
+	}
+	PostSpawnCheck = function() {
+		SetMessage(FormatMessage(GetMessage())); // check the stored message, format it and set it
 	}
 }
 
-if (!("phrases" in getroottable())) {
-	getroottable().phrases <- {};
+// add functions to an entity
+function AddFunctions(ent) {
+	ent.ValidateScriptScope();
+	local scope = ent.GetScriptScope();
+	foreach(key, val in functions) {
+		scope[key] <- val;
+	}
 }
 
+// check each point_worldtext and replace messages that need fixing
 function OnPostSpawn() {
 	local ent = null;
 	while (ent = Entities.FindByClassname(ent, "point_worldtext")) {
@@ -145,4 +100,32 @@ function OnPostSpawn() {
 
 	Using the following method of changing a pwt's message field crashes the game:
 		NetProps.SetPropString(self, "m_szText", message);
+*/
+
+
+/*
+	Important info about strings:
+
+	ficool2 — 09/04/2023 21:35
+	the SetText input works
+	but it can eventually crash from allocating too many strings
+	not an issue if your strings arent unique
+	if they are, its possible to delete those strings
+	spawning an entity with the targetname of that string, setting m_bForcePurgeFixedupStrings netprop to true and killing the entity will free that string
+	these strings are also cleared on round restarts
+	dumpgamestringtable will show if your strings are 'leaking' like this
+*/
+
+/*
+
+Info about point_worldtext and line break characters \n
+
+if the entity's message field in Hammer contains a line break character, then when it is loaded by
+a (Windows?) dedicated server, its s_zText property will be empty.
+
+Outputs created in Hammer which set the message using AddOutput or RunScriptCode() are apparently
+deleted if they contain a line break character.
+
+The only option available appears to be to put the phrases in a script and load them from there.
+
 */

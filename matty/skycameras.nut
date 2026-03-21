@@ -98,15 +98,24 @@ function Precache() {
 
 			NetProps.SetPropInt(player, "m_Local.m_skybox3d.scale", NetProps.GetPropInt(self, "m_skyboxData.scale"))
 			NetProps.SetPropVector(player, "m_Local.m_skybox3d.origin", NetProps.GetPropVector(self, "m_skyboxData.origin"))
-			NetProps.SetPropFloat(player, "m_Local.m_skybox3d.fog.start", NetProps.GetPropFloat(self, "m_skyboxData.fog.start"))
-			NetProps.SetPropFloat(player, "m_Local.m_skybox3d.fog.maxdensity", NetProps.GetPropFloat(self, "m_skyboxData.fog.maxdensity"))
-			NetProps.SetPropFloat(player, "m_Local.m_skybox3d.fog.end", NetProps.GetPropFloat(self, "m_skyboxData.fog.end"))
-			NetProps.SetPropBool(player, "m_Local.m_skybox3d.fog.enable", NetProps.GetPropBool(self, "m_skyboxData.fog.enable"))
-			NetProps.SetPropVector(player, "m_Local.m_skybox3d.fog.dirPrimary", NetProps.GetPropVector(self, "m_skyboxData.fog.dirPrimary"))
-			NetProps.SetPropInt(player, "m_Local.m_skybox3d.fog.colorSecondary", NetProps.GetPropInt(self, "m_skyboxData.fog.colorSecondary"))
-			NetProps.SetPropInt(player, "m_Local.m_skybox3d.fog.colorPrimary", NetProps.GetPropInt(self, "m_skyboxData.fog.colorPrimary"))
-			NetProps.SetPropBool(player, "m_Local.m_skybox3d.fog.blend", NetProps.GetPropBool(self, "m_skyboxData.fog.blend"))
 			NetProps.SetPropInt(player, "m_Local.m_skybox3d.area", NetProps.GetPropInt(self, "m_skyboxData.area"))
+			// fog settings:
+			NetProps.SetPropBool(player, "m_Local.m_skybox3d.fog.enable", NetProps.GetPropBool(self, "m_skyboxData.fog.enable"))
+			NetProps.SetPropBool(player, "m_Local.m_skybox3d.fog.blend", NetProps.GetPropBool(self, "m_skyboxData.fog.blend"))
+			NetProps.SetPropVector(player, "m_Local.m_skybox3d.fog.dirPrimary", NetProps.GetPropVector(self, "m_skyboxData.fog.dirPrimary"))
+			NetProps.SetPropInt(player, "m_Local.m_skybox3d.fog.colorPrimary", NetProps.GetPropInt(self, "m_skyboxData.fog.colorPrimary"))
+			NetProps.SetPropInt(player, "m_Local.m_skybox3d.fog.colorSecondary", NetProps.GetPropInt(self, "m_skyboxData.fog.colorSecondary"))
+			NetProps.SetPropFloat(player, "m_Local.m_skybox3d.fog.start", NetProps.GetPropFloat(self, "m_skyboxData.fog.start"))
+			NetProps.SetPropFloat(player, "m_Local.m_skybox3d.fog.end", NetProps.GetPropFloat(self, "m_skyboxData.fog.end"))
+			NetProps.SetPropFloat(player, "m_Local.m_skybox3d.fog.maxdensity", NetProps.GetPropFloat(self, "m_skyboxData.fog.maxdensity"))
+			// unused datamaps:
+			// farz
+			// colorPrimaryLerpTo
+			// colorSecondaryLerpTo
+			// startLerpTo
+			// endLerpTo
+			// lerptime
+			// duration
 		}
 
 		/**
@@ -185,14 +194,3 @@ foreach(name, callback in EventsTable) {
 	EventsTable[name] = callback.bindenv(this)
 	__CollectGameEventCallbacks(EventsTable)
 }
-
-
-// Notes
-// --------------------------------------------------------------------------------
-
-/*
-	Findings
-		The default skybox set for me when I joined the game was skycam_01.
-		This actually had a later edict index than skycam_02.
-		Presumably the most recent sky_camera to be spawned takes over.
-*/

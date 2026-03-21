@@ -1,179 +1,69 @@
-/**
- * Trigger tricks! v0.1
- *
- * Do stuff to players inside this trigger.
- *
- * Usage:
- * Add this script to the trigger's scripts.
- * Check the below functions to see what you can do.
- * Call `CallScriptFunction <function>` to do it.
- */
+/*
+	Trigger Tricks v0.2
+	Do stuff to entities inside a trigger.
+	Intended for use as an easy way to re-use a spawn trigger for killing AFK players.
+	But can be used to perform operations on any touching entities, provided the
+	trigger's spawnflags allows them to trigger it.
 
-/**
- * Note on damage:
- * The deathrun plugin may negate self-damage, so TakeDamage/Ex should use an attacker handle that's not
- * the players. e.g. worldspawn
- */
+	Usage:
+	Add the script to a trigger.
+	Send it CallScriptFunction > KillPlayers or KillPlayersSilently.
+	Alternatively perform actions on the arrays directly:
+		RunScriptCode > foreach(entity in touching) entity.TakeDamage(...)
+		RunScriptCode > foreach(player in GetPlayers()) player.Stun(...)
+		RunScriptCode > foreach(entity in GetNonPlayers()) entity.Kill()
+*/
 
+/*
+	Changelog
+	0.2
+		Removed stun and 'kill by trigger_hurt' functions
+		Code cleanup
+		Default damage type now includes DMG_PREVENT_PHYSICS_FORCE to stop flinging corpses
+		Changed the scope of the script 's intent to allow operations on non-player entities
+*/
 
-// Functions which affect players in the volume
-// ----------------------------------------------------------------------------------------------------
+local worldspawn = Entities.FindByClassname(null, "worldspawn");
+local DMG_GENERIC = 0;
+local DMG_PREVENT_PHYSICS_FORCE = Constants.FDmgType.DMG_PREVENT_PHYSICS_FORCE;
+local default_damage_type = DMG_GENERIC | DMG_PREVENT_PHYSICS_FORCE;
 
-/**
- * Kill players
- * Works by applying damage equal to their health
- */
-function KillPlayers() {
-	foreach(player in players) {
-		KillPlayer(player);
-	}
-}
+touching <- [];
 
-/**
- * Kill players 'silently' with no death noises
- */
-function KillPlayersSilently() {
-	foreach(player in players) {
-		KillPlayerSilently(player);
-	}
-}
-
-/**
- * Stun or slow players within the volume
- * Uses a trigger_stun and supports different types of stun.
- * The slow_percentage doesn't scale run speed by the player's maximum run speed.
- * Their class or buffs don't matter. All players are treated as if their max
- * run speed is 450, so a slow_percentage of 0.5 would be 225 run speed.
- * @param {float} duration Stun duration
- * @param {integer} type Type of stun. 0 = slow only. 1 = Sandman stun (unable to move). 2 = scared
- * @param {float} slow_percentage Amount of percentage speed reduction. 1.0 is 100%. Not relevant with type 1
- */
-function StunPlayers(duration = 5.0, type = 1, slow_percentage = 1.0) {
-	local stunner = CreateStunTrigger(duration, type, slow_percentage);
-
-	foreach(player in players) {
-		EntFireByHandle(stunner, "EndTouch", "", 0.0, player, player);
-	}
-
-	EntFireByHandle(stunner, "Kill", "", 0.0, activator, caller);
-}
-
-/**
- * Kill players using a trigger_hurt instead of by applying damage
- * @param {integer} damage Damage to apply every 0.5s
- */
-function HurtPlayers(damage = 500) {
-	local hurt = CreateHurtTrigger(damage * 2);
-
-	foreach(player in players) {
-		EntFireByHandle(hurt, "EndTouch", "", 0.0, player, player);
-	}
-
-	EntFireByHandle(hurt, "Kill", "", 0.0, null, null);
-}
-
-
-// Nothing useable below here
-// ----------------------------------------------------------------------------------------------------
-
-local debug = false; // prints debug text to console
-
-players <- [];
 self.ConnectOutput("OnStartTouch", "OnStartTouch");
 self.ConnectOutput("OnEndTouch", "OnEndTouch");
 
-local worldspawn = Entities.FindByClassname(null, "worldspawn");
-
-
-// Functions used by the above
-// ----------------------------------------------------------------------------------------------------
-
-/**
- * Kill a player by damaging them for an amount equal to their health
- * @param {instance} player Player instance
- * @noreturn
- */
-function KillPlayer(player) {
-	if (player.IsValid()) {
-		player.TakeDamageEx(null, player, null, Vector(0, 0, 0), player.GetOrigin(), player.GetHealth(), 0);
-
-		// self-damage is being negated
-		if (NetProps.GetPropInt(player, "m_lifeState") == 0) {
-			// todo: fix the player being thrown from the origin of the map
-			if (debug) printl(activator + " was not killed by TakeDamageEx self-damage, so we're killing them by worldspawn");
-			player.TakeDamageEx(null, worldspawn, null, Vector(0, 0, 0), player.GetOrigin(), player.GetHealth(), 0);
-		}
-	}
+function OnStartTouch() touching.push(activator);
+function OnEndTouch() {
+	local index = touching.find(activator);
+	if (index != null) touching.remove(index);
+	else touching = touching.filter(function(index, entity) {
+		return entity.IsValid();
+	});
 }
+function GetPlayers() return touching.filter(function(index, ent) return ent instanceof CTFPlayer);
+function GetNonPlayers() return touching.filter(function(index, ent) return !(ent instanceof CTFPlayer));
 
+function Damage(entity, amount, type = default_damage_type) {
+	entity.TakeDamageCustom(self, self, self, Vector(), Vector(), amount.tofloat(), type, 0);
+}
+function KillPlayer(player) {
+	Damage(player, player.GetHealth());
+	// if (player.IsAlive()) player.TakeDamage(player.GetHealth(), 0, worldspawn); // take damage from world
+}
 function KillPlayerSilently(player) {
-	NetProps.SetPropInt(player, "m_iObserverLastMode", 5);
+	NetProps.SetPropInt(player, "m_iObserverLastMode", 5); // third person chase cam
 	local team = player.GetTeam();
 	NetProps.SetPropInt(player, "m_iTeamNum", 1);
 	player.DispatchSpawn();
 	NetProps.SetPropInt(player, "m_iTeamNum", team);
 }
+function KillPlayers() foreach(player in GetPlayers()) KillPlayer(player);
+function KillPlayersSilently() foreach(player in GetPlayers()) KillPlayerSilently(player);
 
-/**
- * Create a trigger_stun for use in stunning players.
- * Should be killed after use!
- * See the description of StunPlayers() for more detailed info.
- * @param {float} duration Length of time for the stun effect to last for
- * @param {integer} type The type of stun
- * @param {float} speed_reduction Percentage of speed reduction from 0.0-1.0
- */
-function CreateStunTrigger(duration, type, speed_reduction) {
-	local stunner = SpawnEntityFromTable("trigger_stun", {
-		move_speed_reduction = speed_reduction
-		spawnflags = 1
-		stun_duration = duration
-		stun_type = type
-		trigger_delay = 0
-	});
-
-	return stunner;
-}
-
-function CreateHurtTrigger(damage = 1000, damage_type = 0, no_damage_force = 1, doubling = 0, damage_cap = 20) {
-	local hurt = SpawnEntityFromTable("trigger_hurt", {
-		damage = damage
-		damagetype = damage_type
-		nodmgforce = no_damage_force
-		damagemodel = doubling
-		damagecap = damage_cap
-		spawnflags = 1
-	});
-
-	return hurt;
-}
-
-// ----------------------------------------------------------------------------------------------------
-
-// players start touching
-function OnStartTouch() {
-	if (debug) printl(activator + " OnStartTouch");
-	players.push(activator);
-}
-
-// players stop touching, or disconnect
-function OnEndTouch() {
-	if (debug) printl(activator + " OnEndTouch");
-	local index = players.find(activator);
-
-	if (index != null) {
-		players.remove(index);
-	} else {
-		if (debug) printl(activator + " not found in the array, so we'll clean it of invalid players");
-		players = players.filter(function(index, player) {
-			return player.IsValid();
-		})
-	}
-}
-
-// display touching players
-function Display() {
-	printl(players.len() + " players touching " + self);
-	foreach(player in players) {
-		printl(player);
-	}
-}
+/*
+	Notes
+	m_hTouchingEntities seems to be where touching entities are stored.
+	It's not an array, and GetPropType returns null.
+	This indicates it's not found.
+*/

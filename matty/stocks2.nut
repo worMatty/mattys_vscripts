@@ -1,5 +1,5 @@
 /*
-	Matty's Stocks 2.1.3
+	Matty's Stocks 2.1.4
 
 	* Folds all native constants into root scope
 	* Adds several new useful constants
@@ -45,6 +45,9 @@
 /*
 	Changelog
 
+	2.1.4
+		* Gave CTFPlayer.Die() a return value. True if player is dead.
+		* Added 'participating' filter to GetPlayers to return players on/off an active team
 	2.1.3
 		* Added an option to GetPlayers: 'cap', to limit the maximum length of the array
 	2.1.2
@@ -1105,6 +1108,14 @@ foreach(key, value in constants) {
 		})
 	}
 
+	// participating - players on an active team
+	if ("participating" in options) {
+		local participating = options.participating;
+		players = players.filter(function(index, player) {
+			return participating == (player.GetTeam() > TEAM_SPECTATOR);
+		})
+	}
+
 	// bot
 	if ("bot" in options) {
 		players = players.filter(function(index, player) {
@@ -1213,28 +1224,29 @@ foreach(key, value in constants) {
  */
 
 /**
- * Cause the player to just die
- * @param {bool} silently Quietly move the player to the 'unalive' state without any pain
- * @noreturn
+ * Kill the player by dealing damage equal to their health.
+ * Source of damage is themselves. If they are still alive, try again but attribute it to worldspawn.
+ * @param {bool} silently Kill them by temporarily moving them to spec, causing no death effects or pain cries
+ * @return {bool} True if player is dead
  */
 CTFPlayer_Die <- function(silently = true) {
-	if (!this.IsAlive()) {
-		return;
-	}
+	if (!this.IsAlive()) return true;
 
-	if (silently == true) {
-		NetProps.SetPropInt(this, "m_iObserverLastMode", 5);
+	if (silently) {
+		NetProps.SetPropInt(this, "m_iObserverLastMode", 5); // third person chase cam
 		local team = this.GetTeam();
 		NetProps.SetPropInt(this, "m_iTeamNum", 1);
 		this.DispatchSpawn();
 		NetProps.SetPropInt(this, "m_iTeamNum", team);
+		return true;
 	} else {
-		this.TakeDamage(this.GetHealth(), 0, this);
+		this.TakeDamage(this.GetHealth(), 0, this); // take damage from self
 
-		// self-damage is being neutralised by something
+		// self-damage is being neutralised by something, probably a deathrun plugin
 		if (this.IsAlive()) {
-			this.TakeDamage(this.GetHealth(), 0, worldspawn)
+			this.TakeDamage(this.GetHealth(), 0, worldspawn); // take damage from world
 		}
+		return !this.IsAlive();
 	}
 }
 

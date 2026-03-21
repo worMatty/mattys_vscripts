@@ -14,61 +14,40 @@
 */
 
 IncludeScript("matty/stocks2.nut");
-
 local touching = [];
+self.ConnectOutput("OnStartTouch", "OnStartTouch");
+self.ConnectOutput("OnEndTouch", "OnEndTouch");
 
-self.ConnectOutput("OnStartTouch", "Output_OnStartTouch");
-self.ConnectOutput("OnEndTouch", "Output_OnEndTouch");
-
-function GetTeamNum() {
-	return NetProps.GetPropInt(self, "m_iTeamNum");
-}
-
-function Output_OnStartTouch() {
-	if (activator instanceof CTFPlayer && activator.GetTeam() == GetTeamNum()) {
+function GetTriggerTeam() return NetProps.GetPropInt(self, "m_iTeamNum");
+function OnStartTouch() {
+	if (activator instanceof CTFPlayer && activator.GetTeam() == GetTriggerTeam()) {
 		touching.append(activator);
-
-		// start thinking
-		if (self.GetScriptThinkFunc() == "") {
-			AddThinkToEnt(self, "Think");
-		}
+		if (self.GetScriptThinkFunc() == "") AddThinkToEnt(self, "Think"); // start think
 	}
 }
-
-function Output_OnEndTouch() {
+function OnEndTouch() {
 	// remove player from touch list
-	if (activator != null && activator instanceof CTFPlayer && activator.GetTeam() == GetTeamNum()) {
+	if (activator && activator instanceof CTFPlayer && activator.GetTeam() == GetTriggerTeam()) {
 		local index = touching.find(activator);
-		if (index != null) {
-			touching.remove(index);
-		}
+		if (index != null) touching.remove(index);
 	}
-	// if player is null (disconnected), filter invalid players
-	else if (activator == null) {
-		touching = touching.filter(function(index, player) {
-			return player.IsValid();
-		})
-	}
-
-	// stop thinking when empty
-	if (touching.len() == 0) {
-		AddThinkToEnt(self, null);
-	}
+	// filter out disconnected players
+	else if (!activator) touching = touching.filter(function(index, player) {
+		return player.IsValid();
+	})
+	if (!touching.len()) AddThinkToEnt(self, null); // stop thinking when empty
 }
 
 function Think() {
-	local team_players = GetPlayers({
-		team = GetTeamNum(),
+	local num_live_teammates = GetPlayers({
+		team = GetTriggerTeam(),
 		alive = true
-	});
+	}).len();
 
 	// all players inside
-	if (team_players.len() <= touching.len()) {
+	if (num_live_teammates <= touching.len()) {
 		AddThinkToEnt(self, null);
 		self.AcceptInput("Disable", null, null, null);
-
-		if (team_players.len() > 0) {
-			self.AcceptInput("FireUser1", null, null, null);
-		}
+		if (num_live_teammates > 0) self.AcceptInput("FireUser1", null, null, null); // fire outputs if there are teammates inside
 	}
 }

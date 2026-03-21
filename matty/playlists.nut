@@ -25,35 +25,29 @@
 
 */
 
+// !CompilePal::IncludeFile("sound/mymap/music/track01.mp3")
 playlists.course <- {
 	shuffle = true
 	tracks = [{
-			file = "mymap/music/track01.mp3"
-			length = 120.0
-			name = "Artist = Track Name"
-		}
-		// !CompilePal::IncludeFile("my_project/music/my_music_file.mp3")
-		{
-			soundname = "mymap.music.track01"
-			length = 120.0
-			name = "Artist = Track Name"
-		}
-		// !CompilePal::IncludeFile("my_project/music/my_music_file.mp3")
-	]
+		file = "mymap/music/track01.mp3"
+		length = 120.0
+		name = "Artist = Track Name"
+	} {
+		soundname = "mymap.music.track01"
+		length = 120.0
+		name = "Artist = Track Name"
+	}]
 }
 
+// !CompilePal::IncludeFile("sound/mymap/music/minigame01.mp3")
 playlists.minigames <- {
 	tracks = [{
-			file = "mymap/music/minigame01.mp3"
-			length = 60.0
-		}
-		// !CompilePal::IncludeFile("my_project/music/my_music_file.mp3")
-		{
-			soundname = "mymap.music.minigame01"
-			length = 60.0
-		}
-		// !CompilePal::IncludeFile("my_project/music/my_music_file.mp3")
-	]
+		file = "mymap/music/minigame01.mp3"
+		length = 60.0
+	} {
+		soundname = "mymap.music.minigame01"
+		length = 60.0
+	}]
 }
 
 // ----------------------------------------------------------------------------------------------------
