@@ -77,7 +77,7 @@ Inputuse <- InputUse;
  * @param {integer} charge Charge amount
  */
 function SetCharge(charge) {
-	charge = charge < 0 ? 0.0 : charge; // clamp min
+	charge = charge < 0 ? 0.0 : charge.tofloat(); // clamp min
 
 	// disable
 	if (juice && !charge) {
@@ -89,14 +89,14 @@ function SetCharge(charge) {
 			origin = self.GetOrigin()
 		});
 		if (is_prop) {
-			self.ResetSequence(self.LookupSequence("emptyclick"));
+			self.ResetSequence(self.LookupSequence("empty"));
 		} else if (is_brush) {
 			NetProps.SetPropInt(self, "m_iTextureFrameIndex", 1);
 		}
 	}
 
 	// recharge
-	if (!juice && charge) {
+	else if (!juice && charge) {
 		juice = charge;
 		max_juice = juice;
 
@@ -108,9 +108,16 @@ function SetCharge(charge) {
 			self.SetPlaybackRate(0.0);
 			self.ResetSequence(self.LookupSequence("idle"));
 			self.SetCycle(1.0 - (juice / max_juice));
+			// todo: bar isn't at 100%
 		} else if (is_brush) {
 			NetProps.SetPropInt(self, "m_iTextureFrameIndex", 0);
 		}
+	}
+
+	// just set value
+	else {
+		juice = charge;
+		max_juice = juice;
 	}
 
 	DebugDrawText(self.GetOrigin(), "Juice set to " + charge, false, 3.0);
@@ -174,7 +181,9 @@ function Think() {
 	if (is_prop) {
 		self.SetPlaybackRate(0.0);
 		self.SetCycle(1.0 - (juice / max_juice));
-		// ChatMsg(null, format("juice: %d max_juice: %d cycle: %f", juice, max_juice, cycle));
+		// self.StudioFrameAdvanceManual(1.0 - (juice / max_juice));
+		self.StudioFrameAdvance();
+		self.DispatchAnimEvents(self);
 	}
 
 	// heal
@@ -208,7 +217,7 @@ function Think() {
 			origin = self.GetOrigin()
 		});
 		if (is_prop) {
-			self.ResetSequence(self.LookupSequence("emptyclick"));
+			self.ResetSequence(self.LookupSequence("empty"));
 		} else if (is_brush) {
 			NetProps.SetPropInt(self, "m_iTextureFrameIndex", 1);
 		}
@@ -220,8 +229,9 @@ function Think() {
 // Source reference
 // https://github.com/ValveSoftware/source-sdk-2013/blob/c623a7c30d5cb7275cc64ed0b866f61f4a64c6eb/src/game/server/hl2/item_healthkit.cpp#L385
 
-// Known issue: If the rate is higher than the server framerate, health will initially be dispensed at a faster rate.
-// A possible solution might calculate the health per frame time
+// Known issues: If the rate is higher than the server framerate, health will initially be dispensed at a faster rate.
+// A possible solution might be to calculate the health per frame time.
+// You can keep +use pressed and walk away to keep healing. Easiest solution would be to check position and look angle.
 
 /*
 	Dev notes

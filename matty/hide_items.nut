@@ -92,24 +92,16 @@ if (!("HideItem" in ::CTFPlayer)) {
 			::CTFBot[key] <- val;
 		}
 	}
-}
 
-// restore visibility of items on inventory refresh and round restart
-local EventsID = UniqueString();
-getroottable()[EventsID] <- {
-	OnGameEvent_post_inventory_application = function(params) { // show player items on spawn
-		local player = GetPlayerFromUserID(params.userid);
-		player.ShowWeapons();
-		player.ShowWearables();
+	// event hooks
+	local events = {
+		OnGameEvent_post_inventory_application = function(params) { // show player items on spawn
+			local player = GetPlayerFromUserID(params.userid);
+			player.ShowWeapons();
+			player.ShowWearables();
+		}
 	}
-	OnGameEvent_scorestats_accumulated_update = function(_) { // cleanup events on round restart
-		delete getroottable()[EventsID];
-	}
-}
-local EventsTable = getroottable()[EventsID];
-foreach(name, callback in EventsTable) {
-	EventsTable[name] = callback.bindenv(this)
-	__CollectGameEventCallbacks(EventsTable)
+	__CollectGameEventCallbacks(events);
 }
 
 /*

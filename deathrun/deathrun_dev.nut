@@ -1,5 +1,5 @@
 /*
-	Deathrun Dev v0.1 by worMatty
+	Deathrun Dev v0.2 by worMatty
 	Depends on matty/stock2.nut v2.1.4
 
 	Commands and convenient automations to aid you in deathrun map development.
@@ -49,6 +49,8 @@
 			back - teleport to your saved position
 			stay <on/off> - when on, if alive just before the round restarts, you will be teleported back to the same place afterwards
 			bring <name/@me/@red/@blue/@all> - teleport targets to your position
+		Entities
+			soundfrom <sound> [soundlevel] [volume] [channel] - play a sound from where you are looking. lets you find the right falloff distance
 		Round/game
 			restart - restart the game, or in Arena mode, slay everyone but yourself to cause a round restart
 
@@ -143,7 +145,7 @@ if (!("deathrun_dev" in ROOT)) {
 				local player = GetPlayerFromUserID(params.userid);
 				local text = params.text;
 				local args = split(text, " ", true);
-				CheckCommand(player, args.remove(0), args);
+				CheckCommand(player, args.remove(0), args, deathrun_dev_commands);
 			}
 
 			// store live player location on round end
@@ -213,14 +215,17 @@ function SetConvar(convar, value) {
 
 	if (Convars.IsConVarOnAllowList(convar)) {
 		Convars.SetValue(convar, value); // set convar directly
+		if (developer()) printl(__FILE__ + " Set ConVar " + convar + " to " + value + " directly");
 	} else if (IsDedicatedServer()) {
 		if (Convars.GetStr("sv_allow_point_servercommand") == "always") {
 			SendToServerConsole(convar, value); // set convar via server command
+			if (developer()) printl(__FILE__ + " Set ConVar " + convar + " to " + value + " via server command");
 		} else {
 			return false; // not allowed to send server commands
 		}
 	} else {
 		SendToConsole(convar, value); // set convar on listen server
+		if (developer()) printl(__FILE__ + " Set ConVar " + convar + " to " + value + " via client console command");
 	}
 
 	// local set_value = null;
@@ -267,13 +272,13 @@ function GetDeathrunDevTable(player) {
 }
 
 // teams stuff
-function SortTeams(dr_activator) {
-	function SwitchTeam(player, new_team) {
-		player.ForceChangeTeam(new_team, true); // switch player to new team
-		for (local child = player.FirstMoveChild(); child != null; child = child.NextMovePeer()) {
-			if (child instanceof CEconEntity && child instanceof CBaseCombatWeapon == false) child.SetTeam(new_team); // change equipped cosmetic team
-		}
+function SwitchTeam(player, new_team) {
+	player.ForceChangeTeam(new_team, true); // switch player to new team
+	for (local child = player.FirstMoveChild(); child != null; child = child.NextMovePeer()) {
+		if (child instanceof CEconEntity && child instanceof CBaseCombatWeapon == false) child.SetTeam(new_team); // change equipped cosmetic team
 	}
+}
+function SortTeams(dr_activator) {
 	local players = GetPlayers();
 	foreach(player in players) {
 		if (player.GetTeam() <= TEAM_SPECTATOR) continue;
@@ -284,11 +289,6 @@ function SortTeams(dr_activator) {
 
 // round restart stuff
 if (deathrun_dev.enable_cheats) SetCheats(true);
-if (!IsDedicatedServer() && IsInArenaMode()) {
-	SetConvar("mp_teams_unbalance_limit", 0); // disable team balancing
-	SetConvar("tf_arena_use_queue", 0); // disable arena queue
-	SetConvar("tf_avoidteammates_pushaway", 0); // disable teammate pushaway solidity
-}
 if (deathrun_dev.sort_teams) {
 	local dr_activator = null;
 	local host_player = IsDedicatedServer() ? PlayerInstanceFromIndex(1) : GetListenServerHost();
@@ -311,9 +311,25 @@ if (deathrun_dev.faster_round_restart) {
 	SetConvar("tf_arena_preround_time", 5); // countdown at start of arena match
 	SetConvar("mp_bonusroundtime", 5); // victory time
 }
+// note:
+// script_wipeout executing script: deathrun/deathrun_dev.nut
+// Cannot execute "sv_cheats 1", no player
+// Cannot execute "mp_waitingforplayers_cancel 1", no player
+
+function OnPostSpawn() {
+	if (!IsDedicatedServer() && IsInArenaMode()) {
+		printl(__FILE__ + " Setting deathrun appropriate ConVars");
+		SetConvar("mp_teams_unbalance_limit", 0); // disable team balancing
+		SetConvar("tf_arena_use_queue", 0); // disable arena queue
+		SetConvar("tf_avoidteammates_pushaway", 0); // disable teammate pushaway solidity
+	}
+}
+// note:
+// IsInArenaMode() returns false when run on the first round of a map, on script run and in Precache.
+// need to put it in OnPostSpawn. Maybe it relies on tf_gamerules.
 
 // development commands
-dev_commands <- {
+deathrun_dev_commands <- {
 	// spawn a puppet bot
 	bot = function(player, args) {
 		local quantity = args.len() ? args[0].tointeger() : 1;
@@ -429,7 +445,6 @@ dev_commands <- {
 		})
 		ReplyToCommand(player, "Slew " + slay_these.len() + " players");
 	}
-
 	// resurrect yourself in spawn
 	res = function(player, args) {
 		local raise = (args.len() && args[0] == "raise");
@@ -525,8 +540,45 @@ dev_commands <- {
 	}
 
 	// do
-
+	// do = function(player, args) {
+	// 	if (args.len() < 3) return ReplyToCommand(player, "Usage: <entity> <input> <parameters>");
+	// }
 	// run script code - lets you use backticks in chat
+	// play a sound where you're looking
+	soundfrom = function(player, args) {
+		// get crosshair position
+		// get sound from arg, or use a pre-set one
+		// get soundlevel from arg, or just use 80
+		// get volume from arg, or just use 1
+		// arg 1 - sound
+		// arg 2 - soundlevel
+		// arg 3 - volume
+		// print sound name, sound level and distance in reply
+		// spawn a temporary icon or annotation at the point in the world
+		if (!args.len()) return ReplyToCommand(player, "Play a sound from the point in the world your crosshair hits. Usage: soundfrom <sound> [soundlevel (integer)] [volume] [channel]");
+		local sound_name = args[0];
+		local sound_level = 80;
+		local volume = 1.0;
+		local channel = 0;
+		if (args.len() == 2) sound_level = args[1].tointeger();
+		if (args.len() == 3) volume = args[2].tofloat();
+		if (args.len() == 4) channel = args[3].tointeger();
+		local distance = 10000 * TraceLine(player.EyePosition(), player.EyePosition() + player.EyeAngles().Forward() * 10000, null);
+		// ChatMsg(player, "TraceLine(player.EyePosition(), player.EyePosition() + player.EyeAngles().Forward() * 10000, null): " + (10000 * TraceLine(player.EyePosition(), player.EyePosition() + player.EyeAngles().Forward() * 10000, null)));
+		local origin = player.EyePosition() + player.EyeAngles().Forward() * distance;
+		PrecacheScriptSound(sound_name);
+		EmitSoundEx({
+			sound_name = sound_name
+			sound_level = sound_level
+			volume = volume
+			origin = origin
+		})
+		DebugDrawLine(player.EyePosition(), origin, 0, 200, 255, false, 7.0);
+		DebugDrawBox(origin, Vector(-4, -4, -4), Vector(4, 4, 4), 0, 200, 255, 150, 7.0);
+		ReplyToCommand(player, "\x01Played \x05" + sound_name + " \x01with soundlevel \x05" + sound_level + " \x01from distance of \x05" + distance + " \x01on channel \x05" + channel);
+		EntFire("worldspawn", "RunScriptCode", format("EmitSoundEx({ sound_name = `%s`, flags = SND_STOP })", sound_name), 7.0); // stop looping sounds
+		// EntFire("worldspawn", "RunScriptCode", format("EmitSoundEx({ sound_name = `%s`, origin = Vector(%f, %f, %f), flags = SND_STOP })", sound_name, origin.x, origin.y, origin.z), 5.0); // stop looping sounds
+	}
 
 	// restart the round quickly
 	restart = function(player, args) {
@@ -540,13 +592,34 @@ dev_commands <- {
 			SendToConsole("mp_restartgame 1");
 		}
 	}
+	// set team sorting - sorting on/off
+	sorting = function(player, args) {
+		if (!args.len()) return ReplyToCommand(player, "Team sorting is " + (deathrun_dev.sort_teams ? "on" : "off") + ". Usage: sorting <on/off>");
+		local on = args[0] != "off";
+		deathrun_dev.sort_teams = on;
+		ReplyToCommand(player, "Team sorting has been switched " + (on ? "on" : "off"));
+	}
+	// rebalance = function(player, args) {
+	// 	if (deathrun_dev.sort_teams) {
+	// 		SortTeams(null);
+	// 		return ReplyToCommand(player, "Teams have been resorted");
+	// 	}
+	// 	local players = LivePlayers();
+	// 	local index = players.find(player);
+	// 	if (index != null) players.remove(index); // remove command user so we don't switch their team
+	// 	while (players.len()) {
+	// 		local player = players[RandomInt(0, players.len() - 1)];
+	// 		SwitchTeam(player, players.len() % 2 ? TF_TEAM_RED : TF_TEAM_BLUE);
+	// 	}
+	// 	return ReplyToCommand(player, "Players have been shuffled");
+	// }
 };
 
 // check the command exists and can be used by this id then execute it
-function CheckCommand(player, _command, args) {
-	if (!(_command in dev_commands)) return;
+function CheckCommand(player, _command, args, commands) {
+	if (!(_command in commands)) return;
 
-	local command = dev_commands[_command];
+	local command = commands[_command];
 	local commands_restricted = (deathrun_dev.command_steam_ids.len());
 	local steamid_authorised = player == null ? true : (deathrun_dev.command_steam_ids.find(player.SteamId()) != null);
 
@@ -571,7 +644,7 @@ function PrintDebugCommands() {
 	local commands_restricted = (deathrun_dev.command_steam_ids.len());
 	local message = "Development commands enabled:";
 	local command_list = "";
-	foreach(key, val in dev_commands) {
+	foreach(key, val in deathrun_dev_commands) {
 		command_list += key + ", ";
 	}
 
@@ -618,4 +691,11 @@ function ReplyToCommand(player, text) {
 /*
 	Todo
 	Find out why tf_arena_use_queue is not being set until players spawn
+*/
+
+/*
+	Knowledge:
+	Each script is executed as it's read from the vscripts field of the entity.
+	Precache() is apparently called after all scripts have been executed.
+	OnPostSpawn() is apparently called after all round restart entities have spawned.
 */
