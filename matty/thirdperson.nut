@@ -1,5 +1,5 @@
 /*
-	Thirdperson v2.3
+	Thirdperson v2.3.1
 	By worMatty
 
 	Put players into thirdperson and back into firstperson.
@@ -70,59 +70,37 @@ if (!("MakeThirdPerson" in CTFPlayer)) {
 		firstperson_on_round_restart = true
 	};
 
-	local methods_props = {
-		in_thirdperson = null
-		ignore_thirdperson = null
+	local new_props = {
+		put_in_thirdperson_by_script = null
+		do_not_change_perspective = null
 
-		/**
-		 * Put player into thirdperson.
-		 * If a player was put into thirdperson by external means when this is called,
-		 * the player will be marked to be ignored by future perspective changes from the script.
-		 */
 		MakeThirdPerson = function() {
-			// don't change players who control their own perspective
-			if (this.ignore_thirdperson) {
-				return;
-			}
-
-			// player is already in thirdperson perspective and we did not put them there
-			if (NetProps.GetPropInt(this, "m_nForceTauntCam")) {
-				if (this.in_thirdperson == false) {
-					this.ignore_thirdperson = true; // mark them to be ignored
-				}
-			}
-			// make them thirdperson
-			else {
-				this.in_thirdperson = true;
+			if (this.do_not_change_perspective) return;
+			if (NetProps.GetPropInt(this, "m_nForceTauntCam")) { // player already put in thirdperson by I/O
+				if (!this.put_in_thirdperson_by_script) this.do_not_change_perspective = true; // we didn't put them there. save preference
+				return; // no change needed
+			} else {
 				this.AcceptInput("SetForcedTauntCam", "1", null, null);
+				this.put_in_thirdperson_by_script = true;
 			}
 		}
 
-		/**
-		 * Put the player into first person.
-		 * Will only affect players that were previously put into thirdperson by the script.
-		 */
 		MakeFirstPerson = function() {
-			// player was put in thirdperson by the script and is still in thirdperson perspective
-			if (this.in_thirdperson && NetProps.GetPropInt(this, "m_nForceTauntCam")) {
-				this.in_thirdperson = false;
+			if (this.put_in_thirdperson_by_script && NetProps.GetPropInt(this, "m_nForceTauntCam")) { // is in thirdperson and we put them there previously
 				this.AcceptInput("SetForcedTauntCam", "0", null, null);
+				this.put_in_thirdperson_by_script = false;
 			}
-			this.ignore_thirdperson = null;
+			this.do_not_change_perspective = null; // reset preference
 		}
 	}
 
-	foreach(key, val in methods_props) {
+	foreach(key, val in new_props) {
 		CTFPlayer[key] <- val;
-		CTFBot[key] <- (typeof val == "function") ? function() {
-			return;
-		} : null; // give bots a dummy function
+		CTFBot[key] <- (typeof val == "function") ? @() null : null; // give bots a dummy function
 	}
 }
 
-if (thirdperson.firstperson_on_round_restart) {
-	EntFire("player", "RunScriptCode", "self.MakeFirstPerson()", -1);
-}
+if (thirdperson.firstperson_on_round_restart) EntFire("player", "RunScriptCode", "self.MakeFirstPerson()", -1);
 
 
 // Notes
