@@ -1,0 +1,1 @@
+These scripts are so small that they don't warrant being included in the main directory. Some of them have niche functionality.

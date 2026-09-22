@@ -18,7 +18,7 @@
 	Player helpers
 	* Players() class to produce a filtered list of players by chaining methods
 	* GetPlayers() function which accepts arbitrary options in a table
-	* Wrapper functions GetReds, GetBlues, LiveReds, LiveBlues, DeadReds, DeadBlues
+	* Wrapper functions GetReds, GetBlues, LiveReds, LiveBlues, DeadReds, DeadBlues, LivePlayers, DeadPlayers
 
 	CTFPlayer methods
 	* Die
@@ -38,6 +38,7 @@
 	Other stuff
 	* RandomiseArray - Takes an array and returns a shuffled copy
 	* CleanGameEventCallbacks - Delete invalid game events instead of deleting all of them
+	* PrecacheParticleSystem
 
 	Thanks ficool2 and Joshie for all you've done for us!
 */
@@ -48,6 +49,10 @@
 	2.1.4
 		* Gave CTFPlayer.Die() a return value. True if player is dead.
 		* Added 'participating' filter to GetPlayers to return players on/off an active team
+		* Added PrecacheParticleSystem global function
+		* Added LivePlayers which gets an array of live players
+		* Added DeadPlayers which returns an array of dead players on a team greater than Spectator
+		* Added ammo type constants
 	2.1.3
 		* Added an option to GetPlayers: 'cap', to limit the maximum length of the array
 	2.1.2
@@ -155,6 +160,17 @@ if ("matty" in ROOT) {
 
 // Add various helper constants for you to make use of in I/O
 constants <- {
+	ammo_types = [
+		"TF_AMMO_DUMMY",
+		"TF_AMMO_PRIMARY",
+		"TF_AMMO_SECONDARY",
+		"TF_AMMO_METAL",
+		"TF_AMMO_GRENADES1",
+		"TF_AMMO_GRENADES2",
+		"TF_AMMO_GRENADES3",
+		"TF_AMMO_COUNT",
+	]
+
 	// EmitSoundEx flags
 	SND_NOFLAGS = 0
 	SND_CHANGE_VOL = 1
@@ -197,8 +213,10 @@ constants <- {
 	tf_player_manager = Entities.FindByClassname(null, "tf_player_manager")
 }
 
-foreach(key, value in constants) {
-	ROOT[key] <- value;
+foreach(key, val in constants) {
+	if (typeof val == "table") foreach(key, val in val) ROOT[key] <- val; // fold tables
+	else if (typeof val == "array") foreach(index, elem in val) ROOT[elem] <- index; // fold arrays
+	else ROOT[key] <- val;
 };
 
 
@@ -1217,6 +1235,17 @@ foreach(key, value in constants) {
 	});
 };
 
+/**
+ * Get all live players
+ * @return {array} Array of player instances
+ */
+::DeadPlayers <- function() {
+	return GetPlayers({
+		alive = false
+		participating = true
+	});
+};
+
 
 /**
  * CTFPlayer Extra Functions
@@ -1623,6 +1652,17 @@ foreach(key, value in this) {
 	} else {
 		return rate * 2;
 	}
+};
+
+/**
+ * Precache a particle system
+ * @param {string} name Particle system name
+ */
+::PrecacheParticleSystem <- function(name) {
+	PrecacheEntityFromTable({
+		classname = "info_particle_system"
+		effect_name = name
+	});
 };
 
 

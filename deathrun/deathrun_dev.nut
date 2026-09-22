@@ -1,10 +1,13 @@
 /*
 	Deathrun Dev v0.2 by worMatty
 	Depends on matty/stock2.nut v2.1.4
+	Depends on matty/commands.nut
 
 	Commands and convenient automations to aid you in deathrun map development.
 	Intended for use while running the map in a listen server, but it is safe to leave the script in the map
 	when running it on a dedicated server, as none of its features will be enabled by default.
+
+	Note: deathrun_dev.nut must be added to a logic_script's scripts field for its OnPostSpawn function to be called.
 
 	Features:
 		Enable cheats
@@ -40,7 +43,7 @@
 			tfbots <number> - set the TFBot quota (these bots use nav and can fight)
 		Players
 			heal [name/@red/@blue/@all] - heal yourself or players matching a given criterion or partial name string
-			slay <name/@me/@red/@blue/@all> - kill players matching a given criterion or partial name string
+			slay <<target(s)>> - kill players matching a given criterion or partial name string
 			res - resurrect yourself in spawn
 			raise - resurrect and teleport yourself to where you are spectating
 		Transportation
@@ -48,16 +51,16 @@
 			savepos - save your current position so you can teleport to it later
 			back - teleport to your saved position
 			stay <on/off> - when on, if alive just before the round restarts, you will be teleported back to the same place afterwards
-			bring <name/@me/@red/@blue/@all> - teleport targets to your position
+			bring <<target(s)>> - teleport targets to your position
 		Entities
 			soundfrom <sound> [soundlevel] [volume] [channel] - play a sound from where you are looking. lets you find the right falloff distance
 		Round/game
 			restart - restart the game, or in Arena mode, slay everyone but yourself to cause a round restart
 
 	How to use the script:
-		Add the script to a named logic_script entity's vscripts field. You do not need to add matty/stocks2.nut.
-		You will need to add your Steam3 id to the command user list. You can do this using Hammer I/O, or via the console at run-time.
-		When running the map, you can type commands in chat.
+		Add this script to a named logic_script entity's vscripts field. Since the script uses OnPostSpawn, avoid adding other scripts.
+		Add your Steam id to the allowed users list. read the documentation in commands.nut.
+		Either add yourself as a root command user, or to the allowed users of the command group "deathrun_dev_commands".
 		The options specified in the Features list can be turned on or off by typing the included command line in the listen server console.
 
 	Setting options:
@@ -95,6 +98,7 @@
 */
 
 IncludeScript("matty/stocks2.nut");
+IncludeScript("matty/commands.nut");
 
 if (!("deathrun_dev" in ROOT)) {
 	ROOT.deathrun_dev <- {
@@ -104,50 +108,7 @@ if (!("deathrun_dev" in ROOT)) {
 		make_me_activator = false
 		faster_round_restart = !IsDedicatedServer() // shorten wait times at the start and end of rounds. disabled for dedis as it's assumed you want a real experience
 
-		// take effect immediately
-		dev_commands = true
-		command_steam_ids = ["[U:1:1047392]"] // restrict debug commands to these steam ids
-
-		CheckIdString = function(id) {
-			if (typeof id != "string") {
-				error("CheckIdString: id needs to be a string type. You gave a " + typeof id + "\n");
-				return false;
-			}
-			if (!(startswith(id, "[U:1:") && endswith(id, "]"))) {
-				error("CheckIdString: Not a valid id: " + id + ". Needs to be a Steam3 id format like [U:1:1047392]\n");
-				return false;
-			}
-			return true;
-		}
-		AddCommandUser = function(id) {
-			if (!CheckIdString(id)) return;
-			local index = command_steam_ids.find(id);
-			if (index == null) {
-				command_steam_ids.append(id);
-				printl("Added user id to debug commands authorised list: " + id);
-			}
-		}
-		RemoveCommandUser = function(id) {
-			if (!CheckIdString(id)) return;
-			local index = command_steam_ids.find(id);
-			printl("id: " + id + " index: " + index);
-			if (index != null) {
-				command_steam_ids.remove(index);
-				printl("Removed user id from debug commands authorised list: " + id);
-			}
-		}
-
-		// internal stuff
 		events = {
-			// debugging chat commands
-			OnGameEvent_player_say = function(params) {
-				if (!::deathrun_dev.dev_commands) return;
-				local player = GetPlayerFromUserID(params.userid);
-				local text = params.text;
-				local args = split(text, " ", true);
-				CheckCommand(player, args.remove(0), args, deathrun_dev_commands);
-			}
-
 			// store live player location on round end
 			OnGameEvent_scorestats_accumulated_update = function(_) {
 				local players = GetPlayers();
@@ -162,6 +123,18 @@ if (!("deathrun_dev" in ROOT)) {
 					} else data.staying_pos = null;
 				}
 			}
+
+			// teleport stayers to their previous pos
+			OnGameEvent_teamplay_round_restart = function(_) {
+				local players = GetPlayers();
+				foreach(player in players) {
+					local data = GetDeathrunDevTable(player);
+					if (data.is_staying && data.staying_pos) {
+						player.Teleport(true, data.staying_pos.pos, true, data.staying_pos.ang, false, Vector());
+						ChatMsg(player, "Teleported you to your last position on the previous round");
+					}
+				}
+			}
 		}
 	}
 
@@ -174,28 +147,26 @@ foreach(name, callback in ::deathrun_dev.events) {
 	::deathrun_dev.events[name] = callback.bindenv(this)
 }
 
-function OnPostSpawn() {
-	// teleport stayers to their previous pos
-	local players = GetPlayers();
-	foreach(player in players) {
-		local data = GetDeathrunDevTable(player);
-		if (data.is_staying && data.staying_pos) {
-			player.Teleport(true, data.staying_pos.pos, true, data.staying_pos.ang, false, Vector());
-			ChatMsg(player, "Teleported you to your last position on the previous round");
-		}
-	}
-}
+// function OnPostSpawn() {
+// 	// teleport stayers to their previous pos
+// 	local players = GetPlayers();
+// 	foreach(player in players) {
+// 		local data = GetDeathrunDevTable(player);
+// 		if (data.is_staying && data.staying_pos) {
+// 			player.Teleport(true, data.staying_pos.pos, true, data.staying_pos.ang, false, Vector());
+// 			ChatMsg(player, "Teleported you to your last position on the previous round");
+// 		}
+// 	}
+// }
 
 // script functions
-function CheatsEnabled() {
-	return Convars.GetInt("sv_cheats");
-}
+function CheatsEnabled() return Convars.GetInt("sv_cheats");
 
 /**
  * Attempt to set cheats on or off.
  * If the convar is not on the whitelist, the function will attempt to change the value by sending
  * a server command. It will return true if the command was sent. This should not be used as
- * confirmation that the convar has changed, as there will be a delat before it takes effect.
+ * confirmation that the convar has changed, as there will be a delay before it takes effect.
  * @param {bool} set Set to on or off
  * @return {bool} True if convar is on allow list and was changed, or if a command was sent
  */
@@ -209,6 +180,15 @@ function SetCheats(set) {
 	}
 }
 
+/**
+ * Set a console variable.
+ * Checks if the convar is on the whitelist. Sets the value if true.
+ * Else attempts to set it via command. Will not function if on a dedicated server and commands are disallowed.
+ * @param {string} convar ConVar name string
+ * @param {string} value ConVar calue
+ * @return {bool} True if convar value is the same as the value sipplied, indicating a successful set, or the same value.
+ * Note: Setting convars via server command has a delay, so this return value can't be trusted.
+ */
 function SetConvar(convar, value) {
 	// local old_value = Convars.GetStr(convar);
 	// if (value.tostring() == old_value) return value; // no change needed
@@ -317,6 +297,7 @@ if (deathrun_dev.faster_round_restart) {
 // Cannot execute "mp_waitingforplayers_cancel 1", no player
 
 function OnPostSpawn() {
+	printl(__FILE__ + " OnPostSpawn called");
 	if (!IsDedicatedServer() && IsInArenaMode()) {
 		printl(__FILE__ + " Setting deathrun appropriate ConVars");
 		SetConvar("mp_teams_unbalance_limit", 0); // disable team balancing
@@ -330,6 +311,9 @@ function OnPostSpawn() {
 
 // development commands
 deathrun_dev_commands <- {
+	id_required = true
+	steam_ids = ["[U:1:1047392]"]
+
 	// spawn a puppet bot
 	bot = function(player, args) {
 		local quantity = args.len() ? args[0].tointeger() : 1;
@@ -359,7 +343,7 @@ deathrun_dev_commands <- {
 		// 	ReplyToCommand(player, "Unable to turn on cheats");
 		// 	return;
 		// }
-		if (!cheats_enabled) SetCheats(true); // no time to check for restult. assume cheats will turn on
+		if (!cheats_enabled) SetCheats(true); // no time to check for result. assume cheats will turn on
 
 		local quantity = args[0].tointeger();
 		quantity = quantity < 0 ? 0 : quantity; // clamp min
@@ -373,18 +357,28 @@ deathrun_dev_commands <- {
 		local num_bots = puppet_bots.len();
 		if (quantity == num_bots) return;
 		if (quantity > num_bots) {
-			local count = 0;
+			local count = 0, failed = false;
 			for (local i = num_bots; i < quantity; i++) {
 				if (ServerCommand("bot")) count++;
+				else {
+					failed = true;
+					break;
+				}
 			}
-			ReplyToCommand(player, "Attempting to spawn " + count + " puppet bots");
+			if (failed) ReplyToCommand(player, "Unable to send server commands");
+			else ReplyToCommand(player, "Attempting to spawn " + count + " puppet bots");
 		} else if (quantity < num_bots) {
-			local count = 0;
+			local count = 0, failed = false;
 			while (puppet_bots.len() > quantity) {
 				local bot = puppet_bots.pop();
 				if (ServerCommand("bot_kick " + bot.Name())) count++;
+				else {
+					failed = true;
+					break;
+				}
 			}
-			ReplyToCommand(player, "Attempting to remove " + count + " puppet bots");
+			if (failed) ReplyToCommand(player, "Unable to send server commands");
+			else ReplyToCommand(player, "Attempting to remove " + count + " puppet bots");
 		}
 
 		if (!cheats_enabled) SetCheats(false);
@@ -393,90 +387,75 @@ deathrun_dev_commands <- {
 	tfbots = function(player, args) {
 		local quantity = args.len() ? args[0].tointeger() : 1;
 		quantity = quantity < 0 ? 0 : quantity; // clamp min
-		if (SetConvar("tf_bot_quota", quantity)) {
-			ReplyToCommand(player, "Set TFBot quota to " + quantity);
-		}
+		if (SetConvar("tf_bot_quota", quantity)) ReplyToCommand(player, "Set TFBot quota to " + quantity);
 	}
 
 	// heal yourself or given targets to full - heal [name/@red/@blue/@all]
 	heal = function(player, args) {
-		local heal_these = [];
-
-		if (!args.len()) {
-			heal_these.append(player); // heal command user when no args
-		} else {
-			heal_these = FindPlayersByName(args[0]);
-			if (!heal_these.len()) {
-				ReplyToCommand(player, "No player names found that matched the search string '" + args[0] + "'");
-				return;
-			}
-		}
-
-		local count = 0;
-		heal_these = heal_these.filter(function(index, player) {
-			if (!player.IsAlive()) return false;
-			player.SetHealth(player.GetMaxHealth());
-			ChatMsg(player, "You were healed to full");
+		local targets = [];
+		if (!args.len())
+			if (player) targets.append(player); // heal self
+			else return; // console
+		else targets = FindPlayersByName(player, args[0]);
+		if (!targets.len()) return ReplyToCommand(player, "No player names found that matched the search string '" + args[0] + "'");
+		targets = targets.filter(function(index, target) {
+			if (!target.IsAlive()) return false;
+			target.SetHealth(target.GetMaxHealth());
+			ChatMsg(target, "You were healed to full");
 			return true;
 		});
-		ReplyToCommand(player, "Healed " + heal_these.len() + " players");
+		ReplyToCommand(player, "Healed " + targets.len() + " players");
 	}
-	// slay given targets - slay <name/@me/@red/@blue/@all>
+	// slay given targets - slay <<target(s)>>
 	slay = function(player, args) {
-		local slay_these = [];
-
-		if (!args.len()) {
-			ReplyToCommand(player, "Usage: slay name/@me/@red/@blue/@all");
-			return;
-		} else {
-			if (args.len() == 1 && args[0] == "@me") {
-				slaye_these.append(player);
-			} else {
-				slay_these = FindPlayersByName(args[0]);
-				if (!slay_these.len()) {
-					ReplyToCommand(player, "No player names found that matched the search string '" + args[0] + "'");
-					return;
-				}
-			}
-		}
-
-		slay_these = slay_these.filter(function(index, player) {
-			return player.IsAlive() && player.Die(true);
-		})
-		ReplyToCommand(player, "Slew " + slay_these.len() + " players");
+		if (!args.len()) return ReplyToCommand(player, "Usage: slay <target(s)>");
+		local targets = FindPlayersByName(player, args[0]);
+		if (!targets.len()) return ReplyToCommand(player, "No player names found that matched the search string '" + args[0] + "'");
+		targets = targets.filter(@(index, player) player.IsAlive() && player.Die(true));
+		ReplyToCommand(player, "Slew " + targets.len() + " players");
 	}
-	// resurrect yourself in spawn
+	// resurrect targets in spawn
 	res = function(player, args) {
-		local raise = (args.len() && args[0] == "raise");
-
-		if (!player.IsAlive() && player.GetTeam() > TEAM_SPECTATOR) {
-			local pos = player.GetOrigin()
-			local ang = player.EyeAngles()
-			player.ForceRegenerateAndRespawn();
-			if (raise) {
-				player.Teleport(true, pos, true, ang, false, Vector());
-			}
+		if (!args.len()) return ReplyToCommand(player, "Usage: res <target(s)>");
+		local raise = (args[0] == "raise" && args.remove(0));
+		local targets = FindPlayersByName(player, args[0]);
+		if (!targets.len()) return ReplyToCommand(player, "No player names found that matched the search string '" + args[0] + "'");
+		targets = targets.filter(@(index, target) !target.IsAlive() && target.GetTeam() > TEAM_SPECTATOR && NetProps.GetPropInt(target, "m_Shared.m_iDesiredPlayerClass"));
+		local pos = player.GetOrigin()
+		local ang = player.EyeAngles()
+		foreach(target in targets) {
+			target.ForceRespawn();
+			if (raise) target.Teleport(true, pos, true, ang, false, Vector());
+			ChatMsg(target, "You were respawned by " + player.CName());
 		}
+		if (raise) ReplyToCommand(player, "Raised " + targets.len() + " players");
+		else ReplyToCommand(player, "Respawned " + targets.len() + " players");
 	}
-	// resurrect yourself to your current position
+	// resurrect targets to your current position
 	raise = function(player, args) {
-		CheckCommand(player, "res", ["raise"]);
+		if (!player) return;
+		if (!args.len()) return ReplyToCommand(player, "Usage: raise <target(s)>");
+		args.insert(0, "raise");
+		CheckCommand(player, "res", args);
+	}
+	regen = function(player, args) {
+		if (!player) return;
+		if (!args.len()) return ReplyToCommand(player, "Usage: regen <target(s)>");
+		local targets = FindPlayersByName(player, args[0]);
+		if (!targets.len()) return ReplyToCommand(player, "No player names found that matched the search string '" + args[0] + "'");
+		targets = targets.filter(@(index, player) player.IsAlive() && !player.Regenerate(true));
+		ReplyToCommand(player, "Regenerated " + targets.len() + " players");
 	}
 
 	// goto an entity targetname* - goto <targetname>
 	goto = function(player, args) {
-		if (!args.len()) {
-			ReplyToCommand(player, "Usage: goto <entity name>");
-			return;
-		}
+		if (!player) return;
+		if (!args.len()) return ReplyToCommand(player, "Usage: goto <entity name>");
 		local targetname = args[0].tostring();
 		local ent = Entities.FindByName(null, targetname);
-		if (!ent) {
-			ReplyToCommand(player, "No entity found with the name '" + targetname + "'");
-			return;
-		}
-		local ang = ent.GetAbsAngles();
-		printl("Entity angles: " + ent + " " + ang);
+		if (!ent) return ReplyToCommand(player, "No entity found with the name '" + targetname + "'");
+		// local ang = ent.GetAbsAngles();
+		// printl("Entity angles: " + ent + " " + ang);
 		player.Teleport(true, ent.GetOrigin(), true, ent.GetAbsAngles(), true, Vector());
 		ReplyToCommand(player, "Teleported you to " + ent.GetClassname() + " named " + ent.GetName());
 	}
@@ -516,27 +495,20 @@ deathrun_dev_commands <- {
 	}
 	// bring
 	bring = function(player, args) {
-		local bring = [];
-
-		if (!args.len()) {
-			ReplyToCommand(player, "Usage: bring name/@red/@blue/@all");
-			return;
-		} else {
-			bring = FindPlayersByName(args[0]);
-			if (!bring.len()) {
-				ReplyToCommand(player, "No player names found that matched the search string '" + args[0] + "'");
-				return;
-			}
-		}
-
+		if (!player) return;
+		if (!args.len()) return ReplyToCommand(player, "Usage: bring name/@red/@blue/@all");
+		local targets = FindPlayersByName(player, args[0]);
+		if (!targets.len()) return ReplyToCommand(player, "No player names found that matched the search string '" + args[0] + "'");
 		local pos = player.GetOrigin();
 		local ang = player.EyeAngles();
-		foreach(target in bring) {
+		local count = 0;
+		foreach(target in targets) {
 			if (target == player) continue;
 			target.Teleport(true, pos, true, ang, true, Vector(0, 0, 0));
 			ChatMsg(target, player.CName() + " brought you to them");
+			count++;
 		}
-		ReplyToCommand(player, "Brought " + bring.len() + " players to you");
+		ReplyToCommand(player, "Brought " + count + " players to you");
 	}
 
 	// do
@@ -546,15 +518,7 @@ deathrun_dev_commands <- {
 	// run script code - lets you use backticks in chat
 	// play a sound where you're looking
 	soundfrom = function(player, args) {
-		// get crosshair position
-		// get sound from arg, or use a pre-set one
-		// get soundlevel from arg, or just use 80
-		// get volume from arg, or just use 1
-		// arg 1 - sound
-		// arg 2 - soundlevel
-		// arg 3 - volume
-		// print sound name, sound level and distance in reply
-		// spawn a temporary icon or annotation at the point in the world
+		if (!player) return;
 		if (!args.len()) return ReplyToCommand(player, "Play a sound from the point in the world your crosshair hits. Usage: soundfrom <sound> [soundlevel (integer)] [volume] [channel]");
 		local sound_name = args[0];
 		local sound_level = 80;
@@ -579,6 +543,78 @@ deathrun_dev_commands <- {
 		EntFire("worldspawn", "RunScriptCode", format("EmitSoundEx({ sound_name = `%s`, flags = SND_STOP })", sound_name), 7.0); // stop looping sounds
 		// EntFire("worldspawn", "RunScriptCode", format("EmitSoundEx({ sound_name = `%s`, origin = Vector(%f, %f, %f), flags = SND_STOP })", sound_name, origin.x, origin.y, origin.z), 5.0); // stop looping sounds
 	}
+	// get info about your weapons
+	weaponinfo = function(player, args) {
+		// ammo type strings
+		local ammo_types = [
+			"TF_AMMO_DUMMY",
+			"TF_AMMO_PRIMARY",
+			"TF_AMMO_SECONDARY",
+			"TF_AMMO_METAL",
+			"TF_AMMO_GRENADES1",
+			"TF_AMMO_GRENADES2",
+			"TF_AMMO_GRENADES3",
+			"TF_AMMO_COUNT",
+		]
+
+		// print ammo
+		local ammo_array_len = NetProps.GetPropArraySize(player, "m_iAmmo");
+		ChatMsg(player, "Your reserve ammo quantities:");
+		ChatMsg(player, "\x01Primary \x05" + NetProps.GetPropIntArray(player, "m_iAmmo", 1));
+		ChatMsg(player, "\x01Secondary \x05" + NetProps.GetPropIntArray(player, "m_iAmmo", 2));
+		ChatMsg(player, "\x01Metal \x05" + NetProps.GetPropIntArray(player, "m_iAmmo", 3));
+		ChatMsg(player, "\x01Grenades 1 \x05" + NetProps.GetPropIntArray(player, "m_iAmmo", 4));
+		ChatMsg(player, "\x01Grenades 2 \x05" + NetProps.GetPropIntArray(player, "m_iAmmo", 5));
+		ChatMsg(player, "\x01Grenades 3 \x05" + NetProps.GetPropIntArray(player, "m_iAmmo", 6));
+		ChatMsg(player, "----------")
+		// for (local i = 0; i < ammo_array_len; i++) {
+		// 	local value = NetProps.GetPropIntArray(player, "m_iAmmo", i);
+		// 	ClientPrint(player, HUD_PRINTCONSOLE, "m_iAmmo[" + i + "] = " + value);
+		// }
+
+		// print weapon stats
+		local weapon_array_len = NetProps.GetPropArraySize(player, "m_hMyWeapons");
+		for (local i = 0; i < weapon_array_len; i++) {
+			local weapon = NetProps.GetPropEntityArray(player, "m_hMyWeapons", i);
+			if (weapon) {
+				ChatMsg(player, "\x01Info for weapon classname \x05" + weapon.GetClassname() + "\x01 in equip slot \x05" + weapon.GetSlot());
+				ChatMsg(player, "\x01Internal name \x05" + weapon.GetName());
+				ChatMsg(player, "\x01Print name \x05" + weapon.GetPrintName());
+				ChatMsg(player, "\x01Sub type \x05" + weapon.GetSubType());
+				ChatMsg(player, "\x01Position \x05" + weapon.GetPosition());
+				ChatMsg(player, "\x01Item definition index \x05" + NetProps.GetPropInt(weapon, "m_AttributeManager.m_Item.m_iItemDefinitionIndex"));
+				ChatMsg(player, "\x01Has any ammo \x05" + weapon.HasAnyAmmo()); // returns true if weapon has either primary or secondary ammo, or does not use either
+				ChatMsg(player, "\x01Uses ammo for primary function \x05" + weapon.UsesPrimaryAmmo()); // m_iPrimaryAmmoType >= 0
+				if (weapon.UsesPrimaryAmmo()) { // this method just checks if primary ammo type is < 0
+					local primary_ammo_type = weapon.GetPrimaryAmmoType();
+					ChatMsg(player, "\x01Primary function uses ammo type \x05" + primary_ammo_type + (primary_ammo_type == -1 ? "" : " -- " + ammo_types[primary_ammo_type]));
+					ChatMsg(player, "\x01Primary function's ammo count in the weapon (not used in TF2) \x05" + weapon.GetPrimaryAmmoCount());
+					ChatMsg(player, "\x01Has any primary ammo \x05" + weapon.HasPrimaryAmmo()); // if it uses clip 1, does it have ammo? if not, does player have ammo of their primary type? if not, does the weapon itself have primary ammo?
+				}
+				ChatMsg(player, "\x01Uses ammo for secondary function \x05" + weapon.UsesSecondaryAmmo()); // m_iSecondaryAmmoType >= 0
+				if (weapon.UsesSecondaryAmmo()) { // this method just checks if secondary ammo type is < 0
+					local secondary_ammo_type = weapon.GetSecondaryAmmoType();
+					ChatMsg(player, "\x01Secondary function uses ammo type \x05" + secondary_ammo_type + (secondary_ammo_type == -1 ? "" : " -- " + ammo_types[secondary_ammo_type]));
+					ChatMsg(player, "\x01Secondary function's ammo count in the weapon (not used in TF2) \x05" + weapon.GetSecondaryAmmoCount());
+					ChatMsg(player, "\x01Has any secondary ammo \x05" + weapon.HasSecondaryAmmo()); // if it uses clip 2, does it have ammo? if not, does player have ammo of their secondary type?
+				}
+				// ChatMsg(player, "\x01Uses clip 1 \x05" + weapon.UsesClipsForAmmo1()); // basically just GetMaxClip1 != -1
+				// ChatMsg(player, "\x01Uses clip 2 \x05" + weapon.UsesClipsForAmmo2()); // basically just GetMaxClip2 != -1
+				// ChatMsg(player, "\x01Current ammo in clip 1 \x05" + (weapon.Clip1() == -1 ? "does not use clip 1" : weapon.Clip1()));
+				// ChatMsg(player, "\x01Default size of clip 1 \x05" + (weapon.GetDefaultClip1() == -1 ? "does not use clip 1" : weapon.GetDefaultClip1()));
+				// ChatMsg(player, "\x01Max size of clip 1 \x05" + (weapon.GetMaxClip1() == -1 ? "does not use clip 1" : weapon.GetMaxClip1()));
+
+				if (weapon.UsesClipsForAmmo1()) { // has a clip 1 (tf2 does not use clip2)
+					ChatMsg(player, "\x01Clip 1 current ammo \x05" + weapon.Clip1());
+					ChatMsg(player, "\x01Clip 1 default size \x05" + weapon.GetDefaultClip1());
+					ChatMsg(player, "\x01Clip 1 max size \x05" + weapon.GetMaxClip1());
+				} else {
+					ChatMsg(player, "\x01This weapon does not use clips");
+				}
+				ChatMsg(player, "----------")
+			}
+		}
+	}
 
 	// restart the round quickly
 	restart = function(player, args) {
@@ -587,9 +623,11 @@ deathrun_dev_commands <- {
 				if (elem == player) return false; // do not kill command user
 				else return !elem.Die(true)
 			});
-			if (remaining.len()) ChatMsg(player, "Unable to kill " + remaining.len() + " players");
+			if (remaining.len()) ReplyToCommand(player, "Unable to kill " + remaining.len() + " players");
+			else ReplyToCommand(player, "Restarting the Arena round by slaying all but you");
 		} else { // call a normal round restart
-			SendToConsole("mp_restartgame 1");
+			ServerCommand("mp_restartgame 1");
+			ReplyToCommand(player, "Restarting the round by sending mp_restartgame 1");
 		}
 	}
 	// set team sorting - sorting on/off
@@ -599,99 +637,121 @@ deathrun_dev_commands <- {
 		deathrun_dev.sort_teams = on;
 		ReplyToCommand(player, "Team sorting has been switched " + (on ? "on" : "off"));
 	}
-	// rebalance = function(player, args) {
-	// 	if (deathrun_dev.sort_teams) {
-	// 		SortTeams(null);
-	// 		return ReplyToCommand(player, "Teams have been resorted");
-	// 	}
-	// 	local players = LivePlayers();
-	// 	local index = players.find(player);
-	// 	if (index != null) players.remove(index); // remove command user so we don't switch their team
-	// 	while (players.len()) {
-	// 		local player = players[RandomInt(0, players.len() - 1)];
-	// 		SwitchTeam(player, players.len() % 2 ? TF_TEAM_RED : TF_TEAM_BLUE);
-	// 	}
-	// 	return ReplyToCommand(player, "Players have been shuffled");
-	// }
-};
-
-// check the command exists and can be used by this id then execute it
-function CheckCommand(player, _command, args, commands) {
-	if (!(_command in commands)) return;
-
-	local command = commands[_command];
-	local commands_restricted = (deathrun_dev.command_steam_ids.len());
-	local steamid_authorised = player == null ? true : (deathrun_dev.command_steam_ids.find(player.SteamId()) != null);
-
-	// check command steamid restriction or if source is server console (player == null)
-	if (player == null || !commands_restricted || (commands_restricted && steamid_authorised)) {
-		if (typeof command == "function") { // command is just a function
-			command(player, args);
-		} else {
-			foreach(key, val in command) { // execute all functions in the command
-				if (typeof val == "function") {
-					val(player, args);
-				}
+	// redistribute players
+	rebalance = function(player, args) {
+		if (deathrun_dev.sort_teams) {
+			SortTeams(null);
+			return ReplyToCommand(player, "Teams have been resorted");
+		}
+		local players = LivePlayers();
+		local index = players.find(player);
+		if (index != null) players.remove(index); // remove command user so we don't switch their team
+		while (players.len()) {
+			local player = players.remove(RandomInt(0, players.len() - 1));
+			SwitchTeam(player, players.len() % 2 ? TF_TEAM_RED : TF_TEAM_BLUE);
+			if (player.IsAlive()) player.ForceRegenerateAndRespawn();
+		}
+		ReplyToCommand(player, "Players have been shuffled");
+	}
+	// set class of targets to a given class string (supports using first few letters of class name)
+	setclass = function(player, args) {
+		if (args.len() != 2) return ReplyToCommand(player, "Usage: setclass <target(s)> <class name>");
+		local targets = FindPlayersByName(player, args[0]);
+		if (!targets.len()) return ReplyToCommand(player, "No player names found that matched the search string '" + args[0] + "'");
+		local tfclassname = args[1].tolower(), tfclassint = 0;
+		local classes = {
+			scout = 1
+			sniper = 2
+			soldier = 3
+			demo = 4
+			medic = 5
+			heavy = 6
+			pyro = 7
+			spy = 8
+			engineer = 9
+		}
+		foreach(key, val in classes) {
+			if (startswith(key, tfclassname)) {
+				tfclassname = key;
+				tfclassint = val;
+				break;
 			}
 		}
+		local count = 0;
+		if (tfclassint) {
+			foreach(target in targets) {
+				if (!target.IsAlive()) continue;
+				// target.SetPlayerClass(tfclassint);
+				local old_desired = NetProps.GetPropInt(target, "m_Shared.m_iDesiredPlayerClass");
+				NetProps.SetPropInt(target, "m_Shared.m_iDesiredPlayerClass", tfclassint);
+				local coords = [target, true, target.GetOrigin(), true, target.EyeAngles(), true, target.GetAbsVelocity()];
+				target.ForceRegenerateAndRespawn();
+				target.Teleport.acall(coords);
+				ChatMsg(target, player.CName() + " set your class to " + tfclassname);
+				count++;
+			}
+			ReplyToCommand(player, "\x01Switched class of " + count + " players to \x05" + tfclassname);
+		} else ReplyToCommand(player, "Unrecognised class, '" + tfclassname + "'");
 	}
 };
 
+m_commands.AddCommandGroup("deathrun_dev", deathrun_dev_commands, self.GetScriptScope());
 
-// print debug commands
-function PrintDebugCommands() {
-	local players = GetPlayers();
-	local commands_restricted = (deathrun_dev.command_steam_ids.len());
-	local message = "Development commands enabled:";
-	local command_list = "";
-	foreach(key, val in deathrun_dev_commands) {
-		command_list += key + ", ";
-	}
+// // check the command exists and can be used by this id then execute it
+// function CheckCommand(player, _command, args, commands) {
+// 	if (!(_command in commands)) return;
 
-	// print to authorised players
-	foreach(player in players) {
-		local steamid_authorised = (deathrun_dev.command_steam_ids.find(player.SteamId()) != null);
-		if (!commands_restricted || (commands_restricted && steamid_authorised)) {
-			ClientPrint(player, HUD_PRINTCONSOLE, message);
-			ClientPrint(player, HUD_PRINTCONSOLE, command_list);
-		}
-	}
-	// print to server console
-	printl(message);
-	printl(command_list);
-}
-if (::deathrun_dev.dev_commands) PrintDebugCommands();
+// 	local command = commands[_command];
+// 	local commands_restricted = (deathrun_dev.command_steam_ids.len());
+// 	local steamid_authorised = player == null ? true : (deathrun_dev.command_steam_ids.find(player.SteamId()) != null);
 
-// get an array of player instances with names matching a pattern
-function FindPlayersByName(pattern) {
-	local players = [];
-	if (pattern == "@red") players = GetReds(); // @red
-	else if (pattern == "@blue") players = GetBlues(); // @blue
-	else if (pattern == "@all") players = GetPlayers(); // @all
-	else { // name match
-		for (local i = 1; i <= maxclients; i++) {
-			local player = PlayerInstanceFromIndex(i);
-			if (player && player.IsValid() && player.Name().tolower().find(pattern.tolower()) != null) {
-				players.append(player);
-			}
-		}
-	}
-	return players;
-}
+// 	// check command steamid restriction or if source is server console (player == null)
+// 	if (player == null || !commands_restricted || (commands_restricted && steamid_authorised)) {
+// 		if (typeof command == "function") { // command is just a function
+// 			command(player, args);
+// 		} else {
+// 			foreach(key, val in command) { // execute all functions in the command
+// 				if (typeof val == "function") {
+// 					val(player, args);
+// 				}
+// 			}
+// 		}
+// 	}
+// };
 
-// send text to server console if player == null, else to player's chat
-function ReplyToCommand(player, text) {
-	if (player == null) {
-		printl(text);
-	} else {
-		ClientPrint(player, HUD_PRINTTALK, text);
-	}
-}
 
-/*
-	Todo
-	Find out why tf_arena_use_queue is not being set until players spawn
-*/
+// // print debug commands
+// function PrintDebugCommands() {
+// 	local players = GetPlayers();
+// 	local commands_restricted = (deathrun_dev.command_steam_ids.len());
+// 	local message = "Development commands enabled:";
+// 	local command_list = "";
+// 	foreach(key, val in deathrun_dev_commands) {
+// 		command_list += key + ", ";
+// 	}
+
+// 	// print to authorised players
+// 	foreach(player in players) {
+// 		local steamid_authorised = (deathrun_dev.command_steam_ids.find(player.SteamId()) != null);
+// 		if (!commands_restricted || (commands_restricted && steamid_authorised)) {
+// 			ClientPrint(player, HUD_PRINTCONSOLE, message);
+// 			ClientPrint(player, HUD_PRINTCONSOLE, command_list);
+// 		}
+// 	}
+// 	// print to server console
+// 	printl(message);
+// 	printl(command_list);
+// }
+// if (::deathrun_dev.dev_commands) PrintDebugCommands();
+
+
+// /**
+//  * Send text to server console if player == null, else to player's chat
+//  */
+// function ReplyToCommand(player, text) {
+// 	if (player == null) printl(text);
+// 	else ClientPrint(player, HUD_PRINTTALK, text);
+// }
 
 /*
 	Knowledge:

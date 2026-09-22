@@ -4,58 +4,41 @@ Team Fortress 2 VScripts for various things; mainly useful in the Deathrun gamem
 
 ## Deathrun
 ### Boss Bar
-Monitor the health of one or more entities and players, combining their health and maximum health into one set of values and applying it to the Merasmus boss bar. If you have an arena in your deathrun map, you can use this to show the health of the activator(s). Alternatively, you can use it with a 'boss', as long as the entity(s) has/have health.
+Monitor the health of one or more entities and players, combining their health and maximum health into one set of values and applying it to the Merasmus boss bar. If you have an arena in your deathrun map, you can use this to show the health of the activator(s). Alternatively, you can use it with a 'boss', as long as the entity(s) has/have health. Falls back to a HUD text display if it detects outside interference.
 
 ### Health Scaling
-Easily scale the health of the blue team players based on the number of live reds. Used for arena fights. Raises max health rather than overhealing, and scales down health from health packs to match the class's normal amount. Caps damage from backstab hits against blue to 300 HP per hit.
+Easily scale the health of the blue team players based on the number of live reds. Used for arena fights. Raises max health rather than overhealing, and scales down health from health packs to match the class's normal amount. Caps damage from backstab hits against blue to 300 HP per hit. Intended to be used at the beginning of a fight and not at the start of a round. 
 
 ### Hold the elevator
-* On activation, the elevator/door will wait until all live reds are inside a trigger
-* If the timer elapses, the elevator will proceed regardless
+On activation, the elevator/door will wait until all live reds are inside a trigger. If the timer elapses, the elevator will proceed regardless. This is similar to the elevators in Left 4 Dead, except for the timeout.
 
 ### Speedlane
-Applies a speed boost to players touching a trigger. Useful in making an omnidirectional speedlane instead of using two trigger_pushes.
+Applies a speed boost to players touching a trigger. Useful in making a single omnidirectional speedlane in the deathrun map's activator corridor instead of using multiple trigger_push.
 
 ### Teleport Player
 Ordinarily when a player uses a `trigger_teleport` or a `point_teleport`, their velocity (the speed and direction they are moving through space) is not rectified to match their destination. Only their view angles are matched. If they arrive at a destination that does not have the same angles as the teleporter entrance, they will often slip backwards or to the side, instead of moving forwards away from the destination. This is a problem if the return teleporter is located behind the destination. It results in players being teleported straight back where they came from. This script changes the player's velocity direction to match the angles of the destination entity, so they always arrive moving forwards.
 
-A future version will preserve the player's velocity relative to the destination entity's angles, rather than aligning it, to provide that true *Unreal Tournament*-style teleportation experience.
+A future version will preserve the player's velocity relative to the destination entity's angles, rather than aligning it, to provide that true *Unreal Tournament*-style teleportation experience where you can walk backwards or sideways into a portal and keep moving in that direction on the other side.
 
 ### Trigger Tricks
-Do the following stuff to people inside a trigger:
-* Kill them
-* Kill them silently
-* Stun them
-* Hurt them
+Keep track of live players touching a trigger and do stuff to them.
+
+### Breakable Door
+Calculates an appropriate amount of health to give breakable doors on a deathrun course, that are typically used to slow down the runners so they don't rush too far ahead too quickly. Multiplies the number of live reds by the typical average 'damage per second' of a melee weapon, resulting in an average break time that scales appropriately with player count. In essence, if there's only one runner, the door or plank will break in one second, whereas with multiple runners, the time will be increased, giving them chance to catch up.
 
 ## Entities
-### func_breakable
-Calculate the amount of health a breakable should have in order to keep players at bay for an appropriate amount of time. Scales based on the number of players in the area and the number of seconds you provide.
-
 ### game_text
-Update the message and display to one or more targets in one function call. Saves having to use AddOutput to change the message, then sending the Display input after a short delay. Makes reusing one game_text entity convenient, saving effort and edicts.
-Compatible with game_text_tf.
+Functions attached to game_text entities that enable you to give it a new message and display it straight away. Scripting enables you to insert live data like scores and times rather than needing to create tens or hundreds of AddOutput inputs.
 
 ### point_viewcontrol
-Facilitates multiple players using the same point_viewcontrol.
+Facilitates multiple players using the same point_viewcontrol. Useful when making cutscenes. 
 
-### point_worldtext
-Unfortunately, line breaks (`\n`) added to an entity's message keyvalue field are not used when running the map on a dedicated server. You can store your phrase in this script, add it to the Entity Scripts field of the point_worldtext, and change the message to `phrase.whatever`. On spawn, or when changing the message at run-time, the entity will replace the message with the matching phrase from the script file.
+### deparent_point_viewcontrol
+Just prior to round restart, iterate over all point_viewcontrol cameras and clear their parents. This prevents the entity from being deleted when its parent is deleted on round restart.
 
 ## General Stuff in the 'matty' folder
-### Bumper Cars
-Everything you need to set up a bumper car race, including
-* Lap counter
-* Custom soundscript game sound names for events like lap, final lap, finishing and winning
-* Respawn function for 'out-of-bounds' trigger_multiple
-* Checkpoint system
-Work in progress. The coding is a bit messy and the lap timer system is broken.
-
 ### Feedback viewer
-Display player feedback as training annotations in the world. They expand and collapse based on your distance. Designed for the playtest comment scripts our plugin produces but could be adapted to work with TF2Maps VMFs.
-
-### givemehat
-Apply a random hat or other cosmetic ornament to a prop_dynamic player character model.
+Display feedback from playtesting sessions as training annotations in the world. Annotations expand and collapse when you get close to them and move further away. Designed for the playtest comment scripts our plugin produces but could be adapted to work with TF2Maps VMFs.
 
 ### Holidays
 * Automatically trigger named logic_relays when a holiday is active
@@ -63,47 +46,29 @@ Apply a random hat or other cosmetic ornament to a prop_dynamic player character
 * Supports all valid TF2 holidays
 * Supports custom holidays using date ranges
 * Supports falling back to a date range when the server is forcing a holiday using a console variable
-* Optionally force a holiday on for testing
-* Work-in-progress support for holiday priorities. e.g. If multiple holidays are active, only those with the highest equal priority level will have their logic triggered.
-
-### Jetboots
-For rock and stone!
+* Optionally force a holiday on or off for testing
+* Priority system that 'triggers' the most important holiday(s) when multiple are active (so you don't get a Hallowe'en-themed Christmas)
 
 ### Jukebox
-An easier way to play music in your map
-* Create one or more playlists in a separate file and import them at run-time
-* Optionally randomise the order on import
-* Play through playlists fully in sequence, avoiding the problems caused by logic_case PickRandomShuffle
-* Playlist data is stored globally so it doesn't get wiped on round restart
-* Automatically replay MP3 files when they reach the end
-* Optionally display the track title in chat
-Designed to be used with a separate playlists.nut file.
+A music player designed for deathrun mappers who want to have multiple music tracks but want to avoid repeats. Playlists are stored in global scope so are not affected by round restarts. This ensures that they are played through from start to finish before repeating.
+It will loop MP3 tracks for you and can print track names to chat.
 
-### Math Game
-A simple example script which implements a math question game using func_buttons and point_worldtext.
-
-### No healing
-Bar players from receiving healing from any source. A very simple script.
-
-### Sky cameras
-* Easily switch players between 3D skyboxes
-* Give individuals separate skyboxes or change it for all
-* Set the current default skybox for new joiners
-Based on a script by gidi30. Thank you!
+### Sky Cameras
+Enables you to have multiple 3D skyboxes and to control which one each player sees.
 
 ### Stocks 2
-Many helpful functions including
-* More CTFPlayer methods
-* Convenient chat and HUD messaging
-* Easy filtered player list creation (e.g. live reds, humans only, within radius of X)
-* Versatile player teleport function designed to replace map-wide trigger_teleport brushes
-* Useful constants
+A collection of time-saving functions that are used by some of my scripts. It also makes it easier for mappers to create short, one-line VScript outputs.
+* CTFPlayer methods for getting name and Steam id
+* Convenience functions for printing messages to chat and the HUD
+* Quickly create arrays of players matching criteria (e.g. live reds, no bots, within a radius)
+* Versatile, easy-to-use teleport function that removes the need for large teleport triggers
+* All constants are folded into root scope and there are additional helpful ones from the SDK wiki
 
 ### Thirdperson
-Put players in and out of thirdperson state using I/O or while they are inside a trigger_multiple. This is really good for situations where the player needs to be able to see themselves, such as in minigames, or when something is happening to them (like they are being ridden by a ~~jockey~~ skeleton). If the player was already in thirdperson, because the server has a thirdperson plugin, the script will respect the player's preference and will not change their perspective.
+Easily put players into and out of thirdperson using inputs. Typically used in platforming games. Respects the player's preference if they have used a server plugin to put themselves into thirdperson. Returns players to first person on round restart.
 
-### Training message
-Basic implementation of the TF2 Training Mode HUD message. While the effect is nice, there are some side effects, so you should read the information in the script. Please don't overuse this! Instead, use it in a similar fashion to its original purpose - to direct players with single objectives. Potentially useful in minigames and Warioware-style games.
+### Worldtext
+Functions to make the act of updating and display the content of point_worldtext entities simpler. '//' is replaced with a new line, allowing you to make messages in Hammer that are later displayed with line breaks. Has a basic phrase system that replaces the message with a longer one from the root script scope, enabling you to store your strings in a script rather than having to recompile the map.
 
 ## Map-specific scripts
 * Steamworks Extreme main script

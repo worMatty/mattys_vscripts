@@ -22,29 +22,23 @@
 
 // this is the table you can modify
 myholidays <- {
-
 	valentines = {
-		tfholiday = Constants.EHoliday.kHoliday_Valentines
+		tfholiday = kHoliday_Valentines
 	}
-
 	aprilfools = {
-		tfholiday = Constants.EHoliday.kHoliday_AprilFools
+		tfholiday = kHoliday_AprilFools
 	}
-
 	soldier = {
-		tfholiday = Constants.EHoliday.kHoliday_Soldier
+		tfholiday = kHoliday_Soldier
 	}
-
 	summer = {
-		tfholiday = Constants.EHoliday.kHoliday_Summer
+		tfholiday = kHoliday_Summer
 	}
-
 	birthday = {
-		tfholiday = Constants.EHoliday.kHoliday_TFBirthday
+		tfholiday = kHoliday_TFBirthday
 	}
-
 	halloween = {
-		tfholiday = Constants.EHoliday.kHoliday_Halloween
+		tfholiday = kHoliday_Halloween
 		start_date = {
 			month = 10
 		}
@@ -55,39 +49,24 @@ myholidays <- {
 		use_dates_if_forced = true // use date range if server forces this holiday
 		priority = 2
 	}
-
 	christmas = {
-		tfholiday = Constants.EHoliday.kHoliday_Christmas
+		tfholiday = kHoliday_Christmas
 		priority = 1
 		// forced_on = true
 	}
-
 	fullmoon = {
-		tfholiday = Constants.EHoliday.kHoliday_FullMoon
+		tfholiday = kHoliday_FullMoon
 		// forced_on = true
 	}
-}
 
-// these are just examples and won't be used
-// custom holidays only require a date range
-examples <- {
-
-	// overriding a custom holiday using a date range when the
-	// server is forcing this holiday on all the time.
-	// prevents situations like Hallowe'en all year round
-	halloween = { // name used in the logic_relay: relay_holiday_halloween
-		tfholiday = Constants.EHoliday.kHoliday_Halloween // this is a TF2 native holiday and is activated by the game code on the server
-		start_date = { // specify a date range if you wish to fall back to it if a server is forcing this holiday using console variable
-			month = 10 // holiday starts in October. Without a day specified, it starts on the 1st
+	weekend = {
+		start_date = {
+			weekday = 7
 		}
 		end_date = {
-			month = 11
-			day = 7 // holiday is active up to and including November the 7th
+			weekday = 1
 		}
-		use_dates_if_forced = true // if the server is forcing this holiday using a console variable, the script will revert to the date range
-		priority = 2 // see the info on priority at the top of this doc
 	}
-
 	// a custom pride holiday
 	pride = {
 		start_date = {
@@ -99,7 +78,6 @@ examples <- {
 			day = 31
 		}
 	}
-
 	// a holiday every 9th day of the month
 	nineday = {
 		start_date = {
@@ -108,6 +86,27 @@ examples <- {
 		end_date = {
 			day = 9
 		}
+	}
+}
+
+// these are just examples and won't be used
+// custom holidays only require a date range
+examples <- {
+
+	// overriding a custom holiday using a date range when the
+	// server is forcing this holiday on all the time.
+	// prevents situations like Hallowe'en all year round
+	halloween = { // name used in the logic_relay: relay_holiday_halloween
+		tfholiday = kHoliday_Halloween // this is a TF2 native holiday and is activated by the game code on the server
+		start_date = { // specify a date range if you wish to fall back to it if a server is forcing this holiday using console variable
+			month = 10 // holiday starts in October. Without a day specified, it starts on the 1st
+		}
+		end_date = {
+			month = 11
+			day = 7 // holiday is active up to and including November the 7th
+		}
+		use_dates_if_forced = true // if the server is forcing this holiday using a console variable, the script will revert to the date range
+		priority = 2 // see the info on priority at the top of this doc
 	}
 
 	// date ranges used for testing the code
@@ -151,20 +150,20 @@ examples <- {
 
 	Name									Number	TF2 Enum Constant												Date range
 	--------------------------------------	------	--------------------------------------------------------------	----------------------------
-	Valentines								6		Constants.EHoliday.kHoliday_Valentines							February 14th
-	April Fools								11		Constants.EHoliday.kHoliday_AprilFools							April 1st
-	Soldier									12		Constants.EHoliday.kHoliday_Soldier								April 8th
-	Summer									13		Constants.EHoliday.kHoliday_Summer								Range currently unknown
-	Birthday								1		Constants.EHoliday.kHoliday_TFBirthday							~August 23rd
-	Hallowe'en								2		Constants.EHoliday.kHoliday_Halloween							~October 1st - ~November 7th
-	Christmas								3		Constants.EHoliday.kHoliday_Christmas							~December 1st - ~January 7th
-	Full Moon								8		Constants.EHoliday.kHoliday_FullMoon							Every 28 days
+	Valentines								6		kHoliday_Valentines							February 14th
+	April Fools								11		kHoliday_AprilFools							April 1st
+	Soldier									12		kHoliday_Soldier								April 8th
+	Summer									13		kHoliday_Summer								Range currently unknown
+	Birthday								1		kHoliday_TFBirthday							~August 23rd
+	Hallowe'en								2		kHoliday_Halloween							~October 1st - ~November 7th
+	Christmas								3		kHoliday_Christmas							~December 1st - ~January 7th
+	Full Moon								8		kHoliday_FullMoon							Every 28 days
 
-	'Community Update'						4 		Constants.EHoliday.kHoliday_CommunityUpdate						Not used
-	'End of the Line'						5		Constants.EHoliday.kHoliday_EOTL								Not used
-	'Meet the Pyro'							7		Constants.EHoliday.kHoliday_MeetThePyro							Not used
-	Hallowe'en & Full Moon					9		Constants.EHoliday.kHoliday_HalloweenOrFullMoon					Not used
-	Hallowe'en & Full Moon & Valentines		10		Constants.EHoliday.kHoliday_HalloweenOrFullMoonOrValentines		Not used
+	'Community Update'						4 		kHoliday_CommunityUpdate						Not used
+	'End of the Line'						5		kHoliday_EOTL								Not used
+	'Meet the Pyro'							7		kHoliday_MeetThePyro							Not used
+	Hallowe'en & Full Moon					9		kHoliday_HalloweenOrFullMoon					Not used
+	Hallowe'en & Full Moon & Valentines		10		kHoliday_HalloweenOrFullMoonOrValentines		Not used
 
 	Unused holidays are never switched on by the game but can be forced by the server.
 	Or you! tf_forced_holiday is in the default VScript console variable whitelist.

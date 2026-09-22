@@ -31,6 +31,11 @@
 			CallScriptFunction > ScaleBlueHealth.
 		If you don't want the script to announce the blue's new health, send this input:
 			RunScriptCode > ScaleBlueHealth(false)
+
+	Note:
+		Deathrun plugins sometimes change the health of the blue player. Please contact the server
+		operator running your map and ask them to disable this feature at least for your map,
+		if not globally. Only very old maps need such annoying interference.
 */
 
 /*

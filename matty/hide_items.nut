@@ -1,5 +1,5 @@
 /*
-	Hide Items - Version 0.5 by worMatty
+	Hide Items - Version 0.5.1 by worMatty
     Hide a player's weapons and cosmetics. Adds methods to CTFPlayer & CTFBot
 
     Usage:
@@ -14,27 +14,41 @@
 		Scripters can just use these as methods of a CTFPlayer or CTFBot instance.
 */
 
-::MAX_WEAPONS <- 8
+if (!("HideItem" in CTFPlayer)) {
 
-if (!("HideItem" in ::CTFPlayer)) {
-	local new_methods = {
-		GetWeapons = function() { // gets weapons from player's weapons array
-			local weapons = [];
-			for (local i = 0; i < MAX_WEAPONS; i++) {
+	local methods = {
+
+		/**
+		 * Get the player's equipped weapons
+		 * @return {array} Array of weapon handles
+		 */
+		function GetWeapons() {
+			local weapons = [], weapons_len = NetProps.GetPropArraySize(this, "m_hMyWeapons");
+			for (local i = 0; i < weapons_len; i++) {
 				local weapon = NetProps.GetPropEntityArray(this, "m_hMyWeapons", i);
-				if (weapon != null) weapons.append(weapon);
+				if (weapon && weapon.IsValid()) weapons.append(weapon);
 			}
 			return weapons;
 		}
-		GetWearables = function() { // gets instances of CEconEntity parented to player
+
+		/**
+		 * Get the player's wearables
+		 * @return {array} Array of wearable item handles
+		 */
+		function GetWearables() {
 			local wearables = [];
 			for (local child = this.FirstMoveChild(); child != null; child = child.NextMovePeer()) {
-				if (child instanceof CEconEntity && child instanceof CBaseCombatWeapon == false) wearables.append(child);
+				if (child instanceof CEconEntity && !(child instanceof CBaseCombatWeapon)) wearables.append(child);
 			}
 			return wearables;
 		}
 
-		HideItem = function(item) {
+		/**
+		 * Hide a weapon or wearable item belonging to the player.
+		 * All items are told not to draw, but weapons also have their rendermode changes, their alpha set to 0
+		 * and shadow disabled. This is because when the player switches to a weapon, it will draw again.
+		 */
+		function HideItem(item) {
 			if (!item.IsValid()) return;
 			if (item.GetClassname() == "tf_weapon_parachute_primary") { // kill primary parachute weapon and associated extra wearable
 				local wearable = NetProps.GetPropEntity(item, "m_hExtraWearable");
@@ -49,7 +63,11 @@ if (!("HideItem" in ::CTFPlayer)) {
 				item.DisableDraw();
 			}
 		}
-		ShowItem = function(item) {
+
+		/**
+		 * Unhide an item by instructing it to draw and resetting its rendermode, alpha and enabling its shadow
+		 */
+		function ShowItem(item) {
 			if (startswith(item.GetClassname(), "tf_weapon")) { // restore rendermode, alpha and dynamic shadows
 				item.AcceptInput("AddOutput", "rendermode 1", null, null);
 				item.AcceptInput("Alpha", "255", null, null);
@@ -58,50 +76,79 @@ if (!("HideItem" in ::CTFPlayer)) {
 			item.EnableDraw();
 		}
 
-		HideWeapons = function() { // hide all weapons
+		/**
+		 * Hide all of the player's weapons
+		 */
+		function HideWeapons() {
 			local weapons = GetWeapons();
 			foreach(weapon in weapons) HideItem(weapon);
 		}
-		ShowWeapons = function() { // show all weapons
+
+		/**
+		 * Show all of the player's weapons
+		 */
+		function ShowWeapons() {
 			local weapons = GetWeapons();
 			foreach(weapon in weapons) ShowItem(weapon);
 		}
-		KillWeapons = function() { // kill all weapons
-			local weapons = GetWeapons();
-			foreach(weapon in weapons) weapon.Destroy();
+
+		/**
+		 * Kill all of the player's weapons
+		 */
+		function KillWeapons() {
+			local weapons_len = NetProps.GetPropArraySize(this, "m_hMyWeapons");
+			for (local i = 0; i < weapons_len; i++) {
+				local weapon = NetProps.GetPropEntityArray(this, "m_hMyWeapons", i);
+				if (!weapon) continue;
+				if (weapon.IsValid()) weapon.Destroy();
+				NetProps.SetPropEntityArray(this, "m_hMyWeapons", null, i);
+			}
 		}
 
-		HideWearables = function() { // hide all wearables
+		/**
+		 * Hide all of the player's wearables
+		 */
+		function HideWearables() {
 			local wearables = GetWearables();
 			foreach(wearable in wearables) HideItem(wearable);
 		}
-		ShowWearables = function() { // show all wearables
+
+		/**
+		 * Show all of the player's wearables
+		 */
+		function ShowWearables() {
 			local wearables = GetWearables();
 			foreach(wearable in wearables) ShowItem(wearable);
 		}
-		KillWearables = function() { // kill all wearables
+
+		/**
+		 * Kill all of the player's wearables
+		 */
+		function KillWearables() {
 			local wearables = GetWearables();
 			foreach(wearable in wearables) wearable.Destroy();
 		}
+
 	}
 
-	// add functions to CTFPlayer
-	foreach(key, val in new_methods) {
-		if (typeof val == "function") {
-			::CTFPlayer[key] <- val; //
-			::CTFBot[key] <- val;
-		}
+	// add methods
+	foreach(key, val in methods) {
+		::CTFPlayer[key] <- val; //
+		::CTFBot[key] <- val;
+		if (developer()) printl(__FILE__ + " -- Added " + key + " method to CTFPlayer and CTFBot");
 	}
 
-	// event hooks
-	local events = {
-		OnGameEvent_post_inventory_application = function(params) { // show player items on spawn
+	// hook events
+	local event_hooks = {
+		// show player items on spawn
+		OnGameEvent_post_inventory_application = function(params) {
 			local player = GetPlayerFromUserID(params.userid);
 			player.ShowWeapons();
 			player.ShowWearables();
 		}
 	}
-	__CollectGameEventCallbacks(events);
+	__CollectGameEventCallbacks(event_hooks);
+
 }
 
 /*
@@ -112,6 +159,9 @@ if (!("HideItem" in ::CTFPlayer)) {
 
 /*
 	Changelog
+		0.5.1
+			Hook post-spawn event once on script first run then never again. Do not use ClearGameEventCallbacks.
+			If you do the event will be deleted.
 		0.5
 			* Cleaned up documentation
 			* Cleaned up code and comments

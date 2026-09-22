@@ -52,20 +52,20 @@ function InputUse() {
 			sound_name = "WallHealth.Deny"
 			entity = self
 		});
-		DebugDrawText(self.GetOrigin(), "No juice", false, 3.0);
+		if (!IsDedicatedServer()) DebugDrawText(self.GetOrigin(), "No juice", false, 3.0);
 	} else if (activator.GetHealth() >= activator.GetMaxHealth()) {
 		EmitSoundEx({
 			sound_name = "WallHealth.Deny"
 			entity = activator
 			filter_type = RECIPIENT_FILTER_SINGLE_PLAYER
 		});
-		DebugDrawText(self.GetOrigin(), "Full health", false, 3.0);
+		if (!IsDedicatedServer()) DebugDrawText(self.GetOrigin(), "Full health", false, 3.0);
 	}
 	// else add user to list of users
 	else {
 		users.append(activator);
 		if (!on) AddThinkToEnt(self, "Think"); // start thinking if off
-		DebugDrawText(self.GetOrigin(), "User added", false, 3.0);
+		if (!IsDedicatedServer()) DebugDrawText(self.GetOrigin(), "User added", false, 3.0);
 	}
 
 	return true;
@@ -120,7 +120,7 @@ function SetCharge(charge) {
 		max_juice = juice;
 	}
 
-	DebugDrawText(self.GetOrigin(), "Juice set to " + charge, false, 3.0);
+	if (!IsDedicatedServer()) DebugDrawText(self.GetOrigin(), "Juice set to " + charge, false, 3.0);
 }
 
 /**
@@ -131,7 +131,7 @@ function SetRate(_rate) {
 	if (!rate) return; // maybe someone wants a harm dispenser. allow them to go negative
 	rate = _rate;
 	charge_unit_time = fabs(1.0 / rate); // ensure it's positive as we are setting a time in the future not the past
-	DebugDrawText(self.GetOrigin(), "New rate and charge unit time: " + rate + ", " + charge_unit_time, false, 5.0);
+	if (!IsDedicatedServer()) DebugDrawText(self.GetOrigin(), "New rate and charge unit time: " + rate + ", " + charge_unit_time, false, 5.0);
 }
 
 function Think() {
