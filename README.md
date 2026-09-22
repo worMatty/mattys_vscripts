@@ -37,9 +37,6 @@ Facilitates multiple players using the same point_viewcontrol. Useful when makin
 Just prior to round restart, iterate over all point_viewcontrol cameras and clear their parents. This prevents the entity from being deleted when its parent is deleted on round restart.
 
 ## General Stuff in the 'matty' folder
-### Feedback viewer
-Display feedback from playtesting sessions as training annotations in the world. Annotations expand and collapse when you get close to them and move further away. Designed for the playtest comment scripts our plugin produces but could be adapted to work with TF2Maps VMFs.
-
 ### Holidays
 * Automatically trigger named logic_relays when a holiday is active
 * Check if a holiday is active using scripting
@@ -53,8 +50,8 @@ Display feedback from playtesting sessions as training annotations in the world.
 A music player designed for deathrun mappers who want to have multiple music tracks but want to avoid repeats. Playlists are stored in global scope so are not affected by round restarts. This ensures that they are played through from start to finish before repeating.
 It will loop MP3 tracks for you and can print track names to chat.
 
-### Sky Cameras
-Enables you to have multiple 3D skyboxes and to control which one each player sees.
+### Chat Commands
+Designed for use by map authors to create chat commands for changing the map's settings and triggering events. Uses Steam ids for permissions.
 
 ### Stocks 2
 A collection of time-saving functions that are used by some of my scripts. It also makes it easier for mappers to create short, one-line VScript outputs.
@@ -64,13 +61,23 @@ A collection of time-saving functions that are used by some of my scripts. It al
 * Versatile, easy-to-use teleport function that removes the need for large teleport triggers
 * All constants are folded into root scope and there are additional helpful ones from the SDK wiki
 
+### Melee Only
+Switch players to and from their melee weapon. If something is preventing it, it will be bypassed. If the player does not have an appropriate melee weapon, they will be given one. This saves tons of time when trying to make your own melee-only combat system in a map.
+
+### Hide Items
+Hide or kill weapons and cosmetics on players. Useful when giving the players custom models, where these objects would spoil the look.
+
+### Sky Cameras
+Enables you to have multiple 3D skyboxes and to control which one each player sees.
+
 ### Thirdperson
 Easily put players into and out of thirdperson using inputs. Typically used in platforming games. Respects the player's preference if they have used a server plugin to put themselves into thirdperson. Returns players to first person on round restart.
 
-### Worldtext
-Functions to make the act of updating and display the content of point_worldtext entities simpler. '//' is replaced with a new line, allowing you to make messages in Hammer that are later displayed with line breaks. Has a basic phrase system that replaces the message with a longer one from the root script scope, enabling you to store your strings in a script rather than having to recompile the map.
+### Personal Music
+Basic support for playing sounds or music tracks to players so only they can hear it. If you're making a deathrun map I recommend against this approach as it comes with potential for bugs and you cannot fade it in and out or adjust its volume compared with using an ambient_generic.
 
-## Map-specific scripts
-* Steamworks Extreme main script
-* Castle Steveh main script
-* Deathrun button automation and cooldown noise
+### Worldtext
+Functions to make the act of updating and displaying the content of point_worldtext entities simpler. '//' is replaced with a new line, allowing you to make messages in Hammer that are later displayed with line breaks. Has a basic phrase system that replaces the message with a longer one from the root script scope, enabling you to store your strings in a script rather than having to recompile the map.
+
+### Feedback viewer
+Display feedback from playtesting sessions as training annotations in the world. Annotations expand and collapse when you get close to them and move further away. Designed for the playtest comment scripts our plugin produces but could be adapted to work with TF2Maps VMFs.
