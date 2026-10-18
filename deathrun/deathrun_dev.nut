@@ -1,5 +1,5 @@
 /*
-	Deathrun Dev v0.2.2 by worMatty
+	Deathrun Dev v0.2.2.1 by worMatty
 	Depends on matty/stock2.nut v2.1.4
 	Depends on matty/commands.nut
 
@@ -104,6 +104,8 @@
 /*
 	Changelog
 
+	0.2.2.1
+		Bug fix in SetCheats function: Convars.SetValue() only had one arg.
 	0.2.2
 		* Commands can be used by the listen server host by default. There is no need to add your Steam id anymore.
 		  You can still use this if you wish to let others use the commands, or are running on a dedicated server with features enabled.
@@ -191,7 +193,7 @@ function CheatsEnabled() return Convars.GetInt("sv_cheats");
 function SetCheats(set) {
 	local value = set ? 1 : 0;
 	if (Convars.IsConVarOnAllowList("sv_cheats")) {
-		Convars.SetValue("sv_cheats " + value);
+		Convars.SetValue("sv_cheats", value);
 		return true;
 	} else {
 		return ServerCommand("sv_cheats " + value); // note: server commands take a little while to change
@@ -203,7 +205,7 @@ function SetCheats(set) {
  * Checks if the convar is on the whitelist. Sets the value if true.
  * Else attempts to set it via command. Will not function if on a dedicated server and commands are disallowed.
  * @param {string} convar ConVar name string
- * @param {string} value ConVar calue
+ * @param {any} value ConVar value
  * @return {bool} True if convar value is the same as the value sipplied, indicating a successful set, or the same value.
  * Note: Setting convars via server command has a delay, so this return value can't be trusted.
  */

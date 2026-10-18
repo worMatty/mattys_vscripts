@@ -1,5 +1,5 @@
 /*
-	Commands v0.1.1 by worMatty
+	Commands v0.1.2 by worMatty
 	---------------------------
 
 	* Add multiple groups of commands
@@ -62,6 +62,9 @@
 /*
 	Changelog
 
+	0.1.2
+		Rectified some improper JSDoc syntax
+		Slightly improved ReplyToCommand's efficiency in array construction
 	0.1.1
 		New group setting: listen_server_host_can_use. If true and the script is running on a listen server, the host may use the commands.
 		Commands must now be stored in a table named 'commands' in the incoming data table. Update your scripts.
@@ -91,9 +94,7 @@ __CollectGameEventCallbacks(m_commands.events); // hook player_say event only on
  * @param {string} group_name Command group name. Will be used as the table slot name
  * @param {table} data Table of command data
  * @param {table} scope Script scope/environment to bind all command functions to. If any commands reference functions or variables in the script, supply self.GetScriptScope()
-//  * @param {array} steam_ids Optionally add permitted steam ids from an array
  */
-// m_commands.AddCommandGroup <- function(group_name, data, scope = null, steam_ids = null) {
 m_commands.AddCommandGroup <- function(group_name, data, scope = null) {
 	if (typeof group_name != "string") return error(__FILE__ + " AddCommandGroup needs a string for the group name but you provided a " + (typeof group_name) + "\n");
 	if (typeof data != "table") return error(__FILE__ + " AddCommandGroup needs a table of command data but you provided a " + (typeof data) + "\n");
@@ -162,7 +163,7 @@ m_commands.CheckSteam3IdString <- function(id) {
 /**
  * Add a Steam 3 id to a command group, giving the user permission to execute its commands
  * @param {string} group_name Command group name
- * @param {string/CTFPlayer} input Steam 3 id or player handle
+ * @param {string|CTFPlayer} input Steam 3 id or player handle
  */
 m_commands.AddCommandGroupUser <- function(group_name, input) {
 	if (!(group_name in command_groups)) return error(__FILE__ + " No command group named '" + group_name + "'\n");
@@ -179,7 +180,7 @@ m_commands.AddCommandGroupUser <- function(group_name, input) {
 /**
  * Remove a Steam 3 id from a command group, removing the user's permission to execute its commands
  * @param {string} group_name Command group name
- * @param {string/CTFPlayer} input Steam 3 id or player handle
+ * @param {string|CTFPlayer} input Steam 3 id or player handle
  */
 m_commands.DeleteCommandGroupUser <- function(group_name, input) {
 	if (input instanceof CTFPlayer) input = input.SteamId();
@@ -194,7 +195,7 @@ m_commands.DeleteCommandGroupUser <- function(group_name, input) {
 
 /**
  * Add a Steam 3 id to the root steam id array, giving the user permission to execute all commands
- * @param {string/CTFPlayer} input Steam 3 id or player handle
+ * @param {string|CTFPlayer} input Steam 3 id or player handle
  */
 m_commands.AddRootUser <- function(input) {
 	if (input instanceof CTFPlayer) input = input.SteamId();
@@ -208,7 +209,7 @@ m_commands.AddRootUser <- function(input) {
 
 /**
  * Remove a Steam 3 id from the root steam id array, removing the user's permission to execute all commands
- * @param {string/CTFPlayer} input Steam 3 id or player handle
+ * @param {string|CTFPlayer} input Steam 3 id or player handle
  */
 m_commands.DeleteRootUser <- function(input) {
 	if (input instanceof CTFPlayer) input = input.SteamId();
@@ -291,12 +292,12 @@ m_commands.DumpCommands <- function() {
  * Send text to server console if player == null, else to player's chat
  * @param {CTFPlayer} player Player handle
  * @param {string} formatting Formatting parameters
- * @param {array} ... Variable array of formatting arguments
+ * @varargs {any} Variable array of formatting arguments
  */
 ::ReplyToCommand <- function(player, formatting, ...) {
-	vargv.insert(0, formatting);
-	vargv.insert(0, this);
-	local buffer = format.acall(vargv);
+	local args = [this, formatting];
+	args.extend(vargv);
+	local buffer = format.acall(args);
 	if (!player) printl(buffer);
 	else ClientPrint(player, HUD_PRINTTALK, buffer);
 };
