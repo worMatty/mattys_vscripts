@@ -62,7 +62,6 @@
 		Add this script to a named logic_script entity's vscripts field. Since the script uses OnPostSpawn, avoid adding other scripts.
 		This is because if more than one script defines an OnPostSpawn function, only the one in the last script will work.
 		Add your Steam id to the allowed users list. This is explained below.
-		Either add yourself as a root command user, or to the allowed users of the command group "deathrun_dev".
 		Run your map in a listen server. It will change console variables automatically, and you can use the commands in chat.
 
 	Setting options and toggling features:
@@ -70,8 +69,6 @@
 		Feature settings are stored in global scope. Once they are set, they will not change back when the round restarts.
 		The appropriate line of code to type in console to set each feature is listed above in the Features section.
 		Supply 'true' or 'false' to enable or disable the feature.
-		Alternatively, you can do it using outputs in Hammer. Simply send an input like this to any entity:
-			RunScriptCode > worldspawn > deathrun_dev.option = true
 
 	Adding your Steam id to the command group:
 		In order to use commands you must add your Steam id to the command group's list of authorised ids.
