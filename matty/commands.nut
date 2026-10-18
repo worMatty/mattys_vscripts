@@ -1,6 +1,6 @@
 /*
-	Commands v0.1 by worMatty
-	-------------------------
+	Commands v0.1.1 by worMatty
+	---------------------------
 
 	* Add multiple groups of commands
 	* Add or remove Steam ids at runtime
@@ -59,6 +59,16 @@
 		script m_commands.DumpCommands()
 */
 
+/*
+	Changelog
+
+	0.1.1
+		New group setting: listen_server_host_can_use. If true and the script is running on a listen server, the host may use the commands.
+		Commands must now be stored in a table named 'commands' in the incoming data table. Update your scripts.
+	0.1
+		Initial release
+*/
+
 // set up command system on first run
 IncludeScript("matty/stocks2.nut");
 if ("m_commands" in ROOT) return;
@@ -81,44 +91,38 @@ __CollectGameEventCallbacks(m_commands.events); // hook player_say event only on
  * @param {string} group_name Command group name. Will be used as the table slot name
  * @param {table} data Table of command data
  * @param {table} scope Script scope/environment to bind all command functions to. If any commands reference functions or variables in the script, supply self.GetScriptScope()
- * @param {array} steam_ids Optionally add permitted steam ids from an array
+//  * @param {array} steam_ids Optionally add permitted steam ids from an array
  */
-m_commands.AddCommandGroup <- function(group_name, data, scope = null, steam_ids = null) {
+// m_commands.AddCommandGroup <- function(group_name, data, scope = null, steam_ids = null) {
+m_commands.AddCommandGroup <- function(group_name, data, scope = null) {
 	if (typeof group_name != "string") return error(__FILE__ + " AddCommandGroup needs a string for the group name but you provided a " + (typeof group_name) + "\n");
 	if (typeof data != "table") return error(__FILE__ + " AddCommandGroup needs a table of command data but you provided a " + (typeof data) + "\n");
-	if (!("group_name" in command_groups)) { // TODO: why am i checking this?
-		// command group default values
-		command_groups[group_name] <- {
+	if (!scope) scope = this;
+
+	// add group if it does not exist. existing groups will not have their settings changed
+	if (!("group_name" in command_groups)) {
+		// command group defaults
+		local defaults = {
 			enabled = true // toggle the whole group on or off
 			id_required = true // only useable by players with a matching steam id, or console
+			listen_server_host_can_use = false // when running on a listen server, the host can use these
 			commands = {}
 			steam_ids = []
-		};
-	}
-	if (!scope) scope = this;
-	local AddSteamIds = function(ids) {
-		if (typeof ids == "string") ids = [ids];
-		foreach(id in ids) AddCommandGroupUser(group_name, id);
-	}
-	foreach(key, val in data) {
-		if (key == "id_required") command_groups[group_name].id_required = val;
-		else if (key == "steam_ids") AddSteamIds(val);
-		else {
-			try {
-				// deprecated code supporting multiple command functions in one
-				// if (typeof val == "function") { // command contains a function
-				// 	command_groups[group_name].commands[key] <- val.bindenv(scope);
-				// } else { // command contains a table, containing functions
-				// 	command_groups[group_name].commands[key] <- val;
-				// 	local command = command_groups[group_name].commands[key];
-				// 	foreach(key, val in command) if (typeof val == "function") command[key] <- val.bindenv(scope);
-				// }
-				command_groups[group_name].commands[key] <- val.bindenv(scope); // just add one function per command
-			} catch (e) error(__FILE__ + " Error trying to add command with key " + key + ". Type of val is " + (typeof val) + ". Exception: " + e + "\n");
 		}
+		foreach(key, val in defaults) if (!(key in data)) data[key] <- val; // add missing defaults
+		// check ids
+		for (local i = data.steam_ids.len() - 1; i >= 0; i--) {
+			local id = data.steam_ids[i];
+			if (!CheckSteam3IdString(id)) {
+				error(__FILE__ + " Invalid Steam id found when adding command group " + group_name + ": " + id + ". This id will be deleted");
+				data.steam_ids.remove(i);
+			}
+		}
+		command_groups[group_name] <- data; // add new command group
 	}
-	if (developer()) printf("%s Added %d commands in group %s\n", __FILE__, command_groups[group_name].commands.len(), group_name);
-	if (steam_ids) AddSteamIds(steam_ids);
+
+	foreach(key, val in data.commands) command_groups[group_name].commands[key] <- val.bindenv(scope); // replace and rebind existing command functions
+	if (developer()) printf("%s -- Added/updated %d commands in group '%s'\n", __FILE__, command_groups[group_name].commands.len(), group_name);
 }
 
 /**
@@ -226,7 +230,7 @@ m_commands.CheckCommand <- function(player, command_name, args) {
 	foreach(group in command_groups) {
 		if (!group.enabled || !(command_name in group.commands)) continue; // group disabled, or command not in group
 		local command = group.commands[command_name];
-		local authorised = (!player || !group.id_required) ? true : (group.steam_ids.find(player.SteamId()) != null || m_commands.steam_ids.find(player.SteamId()) != null); // if player == null, it's the server console
+		local authorised = (!player || !group.id_required || (group.listen_server_host_can_use && player && player == GetListenServerHost())) ? true : (group.steam_ids.find(player.SteamId()) != null || m_commands.steam_ids.find(player.SteamId()) != null); // if player == null, it's the server console
 		if (!authorised) continue;
 		// if (typeof command == "function") command(player, args); // deprecated
 		// else foreach(key, val in command) if (typeof val == "function") val(player, args); // deprecated
@@ -250,6 +254,7 @@ m_commands.DumpCommands <- function() {
 		}
 		printl("    Enabled: " + val.enabled);
 		printl("    Restricted: " + val.id_required);
+		printl("    Listen server host can use: " + val.listen_server_host_can_use);
 		if (!val.steam_ids.len()) printl("    No Steam ids added");
 		else {
 			local buffer = "    Steam ids: ";
