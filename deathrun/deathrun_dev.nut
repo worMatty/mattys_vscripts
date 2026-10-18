@@ -188,7 +188,7 @@ function CheatsEnabled() return Convars.GetInt("sv_cheats");
 function SetCheats(set) {
 	local value = set ? 1 : 0;
 	if (Convars.IsConVarOnAllowList("sv_cheats")) {
-		Convars.SetValue("sv_cheats " + value);
+		Convars.SetValue("sv_cheats ", value);
 		return true;
 	} else {
 		return ServerCommand("sv_cheats " + value); // note: server commands take a little while to change
@@ -213,13 +213,13 @@ function SetConvar(convar, value) {
 		if (developer()) printl(__FILE__ + " Set ConVar " + convar + " to " + value + " directly");
 	} else if (IsDedicatedServer()) {
 		if (Convars.GetStr("sv_allow_point_servercommand") == "always") {
-			SendToServerConsole(convar, value); // set convar via server command
+			SendToServerConsole(convar + " " + value); // set convar via server command
 			if (developer()) printl(__FILE__ + " Set ConVar " + convar + " to " + value + " via server command");
 		} else {
 			return false; // not allowed to send server commands
 		}
 	} else {
-		SendToConsole(convar, value); // set convar on listen server
+		SendToConsole(convar + " " + value); // set convar on listen server
 		if (developer()) printl(__FILE__ + " Set ConVar " + convar + " to " + value + " via client console command");
 	}
 
