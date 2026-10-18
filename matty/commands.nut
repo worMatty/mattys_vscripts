@@ -56,7 +56,7 @@
 	* The player_say event is hooked once on script setup. Do not delete all events using ClearGameEventCallbacks.
 	* Scripters, see the documentation for each function below.
 	* You can use this in server console to see an overview of added command groups:
-		m_commands.DumpCommands()
+		script m_commands.DumpCommands()
 */
 
 // set up command system on first run
@@ -150,7 +150,7 @@ m_commands.DisbleCommandGroup <- function(group_name) command_groups[group_name]
  * @return {bool} True if id format is valid
  */
 m_commands.CheckSteam3IdString <- function(id) {
-	if (typeof id != "string") return error(__FILE__ + " id needs to be a string type. You gave a " + typeof id + "\n");
+	if (typeof id != "string") return false;
 	if (!(startswith(id, "[U:1:") && endswith(id, "]"))) return error(__FILE__ + " Not a valid id: " + id + ". Needs to be a Steam3 id format like [U:1:1047392]\n");
 	return true;
 }
@@ -161,9 +161,10 @@ m_commands.CheckSteam3IdString <- function(id) {
  * @param {string/CTFPlayer} input Steam 3 id or player handle
  */
 m_commands.AddCommandGroupUser <- function(group_name, input) {
-	if (input instanceof CTFPlayer) input = input.SteamId();
-	if (!CheckSteam3IdString(input)) return;
 	if (!(group_name in command_groups)) return error(__FILE__ + " No command group named '" + group_name + "'\n");
+	if (input instanceof CTFPlayer) input = input.SteamId();
+	if (typeof input != "string") return;
+	if (!CheckSteam3IdString(input)) return;
 	local index = command_groups[group_name].steam_ids.find(input);
 	if (index == null) {
 		command_groups[group_name].steam_ids.append(input);
