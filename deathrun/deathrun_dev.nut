@@ -61,7 +61,7 @@
 	How to use the script:
 		Add this script to a named logic_script entity's vscripts field. Since the script uses OnPostSpawn, avoid adding other scripts.
 		This is because if more than one script defines an OnPostSpawn function, only the one in the last script will work.
-		Add your Steam id to the allowed users list. Read the documentation in commands.nut.
+		Add your Steam id to the allowed users list. This is explained below.
 		Either add yourself as a root command user, or to the allowed users of the command group "deathrun_dev".
 		Run your map in a listen server. It will change console variables automatically, and you can use the commands in chat.
 
